@@ -6,8 +6,8 @@ public class Bomb : MonoBehaviour {
     float fuseTimer = 3.0f;
 
     // where bomb is in tile array
-    int tileX;
-    int tileY;
+    int x;
+    int y;
     Level level;
 
     // Use this for initialization
@@ -15,9 +15,9 @@ public class Bomb : MonoBehaviour {
 
     }
 
-    public void init(int tileX, int tileY, Level level) {
-        this.tileX = tileX;
-        this.tileY = tileY;
+    public void init(int x, int y, Level level) {
+        this.x = x;
+        this.y = y;
         this.level = level;
     }
 
@@ -25,8 +25,13 @@ public class Bomb : MonoBehaviour {
     void Update() {
         fuseTimer -= Time.deltaTime;
         if (fuseTimer <= 0.0f) {
-            level.explodeBomb(tileX, tileY);
-            Destroy(gameObject);
+            explode();
         }
     }
+
+    public void explode() {
+        level.spawnExplosion(x, y, 0, 0, 3);
+        Destroy(gameObject);
+    }
+
 }

@@ -18,9 +18,9 @@ public class PlayerController : MonoBehaviour {
             level.placeBomb(transform.position);
         }
         if (Input.GetKeyDown(KeyCode.Backspace)) {  // reset
-            transform.position = new Vector3(11, 11, 11);
-            rb.velocity = Vector3.zero;
             level.GenerateLevel();
+            transform.position = level.getRandomGroundPosition();
+            rb.velocity = Vector3.zero;
         }
     }
 

@@ -11,14 +11,18 @@ public class Level : MonoBehaviour {
 
     public Texture2D[] textures;
     public Object bombPrefab;
+    public Object explosionPrefab;
+    public bool needToRebuild { private get; set; }
+
+    public Dictionary<int, Bomb> bombs = new Dictionary<int, Bomb>();
 
     Texture2D atlas;
     Rect[] atlasRects;
 
-    const int GROUND = 0;
-    const int WALL = 1;
-    const int WALL_CRACKED = 2;
-    const int BOMB = 3;
+    public const int GROUND = 0;
+    public const int WALL = 1;
+    public const int WALL_CRACKED = 2;
+    public const int BOMB = 3;
 
     Mesh mesh;
 
@@ -52,7 +56,7 @@ public class Level : MonoBehaviour {
             for (int y = 0; y < height; y++) {
                 if (x == 0 || x == width - 1 || y == 0 || y == height - 1 || (x % 2 == 0 && y % 2 == 0)) {
                     tiles[x, y] = WALL;     // if at edge or random chance
-                } else if (Random.value < .1f) {
+                } else if (Random.value < .2f) {
                     tiles[x, y] = WALL_CRACKED;   // random chance
                 } else {
                     tiles[x, y] = GROUND;
@@ -61,7 +65,6 @@ public class Level : MonoBehaviour {
         }
         BuildMesh();
     }
-
 
     // builds mesh from tile data
     public void BuildMesh() {
@@ -141,7 +144,7 @@ public class Level : MonoBehaviour {
     }
 
     private void addUvsAndTris(int index, int x, int y) {
-        if(index == BOMB) {
+        if (index == BOMB) {
             index = GROUND;
         }
         if (index == GROUND && (x + y) % 2 == 0) {
@@ -167,7 +170,7 @@ public class Level : MonoBehaviour {
     }
 
     private int getHeight(int x, int y) {
-        if (x < 0 || x >= tiles.GetLength(0) || y < 0 || y >= tiles.GetLength(1)) {
+        if (!insideTileArray(x, y)) {
             return 0;
         }
         switch (tiles[x, y]) {
@@ -180,61 +183,89 @@ public class Level : MonoBehaviour {
     }
 
     // safely check for tile id in array
-    private int getTile(int x, int y) {
-        if (x < 0 || x >= tiles.GetLength(0) || y < 0 || y >= tiles.GetLength(1)) {
+    public int getTile(int x, int y) {
+        if (!insideTileArray(x, y)) {
             return -1;
         }
         return tiles[x, y];
+    }
+
+    // sets tile at x,y to id
+    public void setTile(int x, int y, int id) {
+        if (!insideTileArray(x, y)) {
+            return;
+        }
+        tiles[x, y] = id;
+    }
+
+    // returns whether or not x,y is inside tile array
+    private bool insideTileArray(int x, int y) {
+        return x >= 0 && x < tiles.GetLength(0) && y >= 0 && y < tiles.GetLength(1);
     }
 
     // figure out which tile 'pos' is in
     // then place bomb prefab there
     public void placeBomb(Vector3 pos) {
         int x = (int)(pos.x / SIZE);
-        int z = (int)(pos.z / SIZE);
+        int y = (int)(pos.z / SIZE);
 
-        if (getTile(x, z) != GROUND) {   // if not on ground or outside of tile array then return
+        if (getTile(x, y) != GROUND) {   // if not on ground or outside of tile array then return
+            return;
+        }
+        tiles[x, y] = BOMB;
+
+        float xf = x * SIZE + SIZE * 0.5f;
+        float yf = y * SIZE + SIZE * 0.5f;
+        Vector3 spawn = new Vector3(xf, 0.0f, yf);
+
+        GameObject go = (GameObject)Instantiate(bombPrefab, spawn, Quaternion.identity);
+        go.name = "Bomb";
+        Bomb b = go.GetComponent<Bomb>();
+        b.init(x, y, this);
+        bombs.Add(y * width + x, b);
+    }
+
+    public void spawnExplosion(int x, int y, int dx, int dy, int life) {
+        int id = getTile(x, y);
+        if (id == WALL) {    // this explosion hit a wall
+            return;
+        }
+        setTile(x, y, GROUND);
+        if (id == WALL_CRACKED) {
+            needToRebuild = true;
+            life = 0; // reduce life of explosion to zero so it wont spread anymore
+        }
+        if (id == BOMB) {    // this explosion hit a bomb so blow bomb up now
+            bombs[y * width + x].explode();
+            bombs.Remove(y * width + x);
             return;
         }
 
-        tiles[x, z] = BOMB;
-
         float xf = x * SIZE + SIZE * 0.5f;
-        float zf = z * SIZE + SIZE * 0.5f;
-        Vector3 spawn = new Vector3(xf, 0.0f, zf);
-
-        GameObject go = (GameObject)Instantiate(bombPrefab, spawn, Quaternion.identity);
-        go.GetComponent<Bomb>().init(x, z, this);
-        go.name = "Bomb";
+        float yf = y * SIZE + SIZE * 0.5f;
+        Vector3 spawn = new Vector3(xf, SIZE * 0.5f, yf);
+        GameObject go = (GameObject)Instantiate(explosionPrefab, spawn, Quaternion.identity);
+        go.name = "Explosion";
+        go.GetComponent<Explosion>().start(x, y, dx, dy, life, this);
     }
 
-    // explodes bomb from outward from tile at x,y
-    public void explodeBomb(int x, int y) {
-        tiles[x, y] = GROUND;   // set tile back to ground
-
-        int dist = 2;   // distance the bomb explosion travels
-        bool rebuild = false;
-        for (int dir = 0; dir < 4; dir++) {
-            for (int i = 0; i <= dist; i++) {
-                int cx, cy;
-                switch (dir) {
-                    case 0: cx = x + i; cy = y; break;
-                    case 1: cx = x - i; cy = y; break;
-                    case 2: cx = x; cy = y + i; break;
-                    case 3: cx = x; cy = y - i; break;
-                    default: cx = cy = -1; break;
-                }
-                int id = getTile(cx, cy);
-                if (id == WALL) {
-                    break;  // stop this direction if it hits wall
-                } else if (id == WALL_CRACKED) {
-                    tiles[cx, cy] = GROUND;
-                    rebuild = true;
+    public Vector3 getRandomGroundPosition() {
+        List<int> spots = new List<int>();
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                if (getTile(x, y) == GROUND) {
+                    spots.Add(y * width + x);
                 }
             }
         }
-        if (rebuild) {
+        int r = spots[Random.Range(0, spots.Count)];
+        return new Vector3(r % width, 1.0f, r / width) * SIZE + Vector3.one * SIZE * 0.5f;
+    }
+
+    void LateUpdate() {
+        if (needToRebuild) {
             BuildMesh();
+            needToRebuild = false;
         }
     }
 
