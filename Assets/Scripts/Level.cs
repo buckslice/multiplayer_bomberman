@@ -33,7 +33,7 @@ public class Level : MonoBehaviour {
 
 
     // Use this for initialization
-    void Start() {
+    void Awake() {
         atlas = new Texture2D(1024, 1024);
         atlasRects = atlas.PackTextures(textures, 2, 1024);
         atlas.filterMode = FilterMode.Point;
@@ -202,6 +202,11 @@ public class Level : MonoBehaviour {
     private bool insideTileArray(int x, int y) {
         return x >= 0 && x < tiles.GetLength(0) && y >= 0 && y < tiles.GetLength(1);
     }
+
+	// returns 1d tile position in array based on pos
+	public int getTilePos(Vector3 pos){
+		return (int)(pos.z / SIZE) * width + (int)(pos.x / SIZE);
+	}
 
     // figure out which tile 'pos' is in
     // then place bomb prefab there

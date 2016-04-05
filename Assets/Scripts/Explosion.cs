@@ -37,7 +37,9 @@ public class Explosion : MonoBehaviour {
                 level.spawnExplosion(x + dx, y + dy, dx, dy, life);
             }
         }
-        yield return new WaitForSeconds(1.5f);
+		yield return new WaitForSeconds (0.4f);
+		GetComponent<Collider> ().enabled = false;
+        yield return new WaitForSeconds(1.0f);
         Destroy(gameObject);
     }
 
