@@ -8,6 +8,7 @@ public class PlayerController : MonoBehaviour {
     Rigidbody rb;
     Level level;
 	bool reloading = false;
+    int bombLimit = 3;
 
     // Use this for initialization
     void Start() {
@@ -18,7 +19,11 @@ public class PlayerController : MonoBehaviour {
 
     void Update() {
         if (Input.GetKeyDown(KeyCode.Space)) {  // lay bomb
-            level.placeBomb(transform.position);
+            if (GameObject.FindGameObjectsWithTag("Bomb").Length <= bombLimit)
+            {
+                level.placeBomb(transform.position);
+            }
+            
         }
         if (Input.GetKeyDown(KeyCode.Backspace)) {  // reset
             level.GenerateLevel();
