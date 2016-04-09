@@ -34,4 +34,10 @@ public class Bomb : MonoBehaviour {
         Destroy(gameObject);
     }
 
+    void OnTriggerExit(Collider c) {
+        if(c.tag == "Player") {
+            GetComponent<Collider>().isTrigger = false;
+        }
+    }
+
 }
