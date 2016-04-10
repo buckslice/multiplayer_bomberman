@@ -433,6 +433,7 @@ GameObject:
   - 23: {fileID: 279585426}
   - 33: {fileID: 279585425}
   - 64: {fileID: 279585429}
+  - 114: {fileID: 279585430}
   m_Layer: 0
   m_Name: Level
   m_TagString: Untagged
@@ -516,6 +517,18 @@ MeshCollider:
   serializedVersion: 2
   m_Convex: 0
   m_Mesh: {fileID: 0}
+--- !u!114 &279585430
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 279585424}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4ae850e41a9b2d48991f910af96b7e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  player: {fileID: 916114192}
 --- !u!1 &282774225
 GameObject:
   m_ObjectHideFlags: 0
@@ -1291,6 +1304,10 @@ Transform:
   - {fileID: 1525575832}
   m_Father: {fileID: 216765138}
   m_RootOrder: 0
+--- !u!4 &916114192 stripped
+Transform:
+  m_PrefabParentObject: {fileID: 411820, guid: 1ddad7dcc282fa04e92f92339c7ed9ba, type: 2}
+  m_PrefabInternal: {fileID: 489601070}
 --- !u!1 &944060263
 GameObject:
   m_ObjectHideFlags: 0
@@ -1563,35 +1580,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 140130774}
   m_RootOrder: 0
---- !u!1 &1238523397
-GameObject:
-  m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 150244, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 2}
-  m_PrefabInternal: {fileID: 0}
-  serializedVersion: 4
-  m_Component:
-  - 4: {fileID: 1238523398}
-  m_Layer: 0
-  m_Name: EthanRightArm
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1238523398
-Transform:
-  m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 441846, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 2}
-  m_PrefabInternal: {fileID: 0}
-  m_GameObject: {fileID: 1238523397}
-  m_LocalRotation: {x: -0.07767317, y: 0.0839258, z: -0.0029016384, w: 0.9934359}
-  m_LocalPosition: {x: 0.081806876, y: 0.009300272, z: 0.096346125}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_Children:
-  - {fileID: 1838792959}
-  m_Father: {fileID: 1375412782}
-  m_RootOrder: 0
---- !u!1001 &1249963996
+--- !u!1001 &1205801614
 Prefab:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -1630,14 +1619,37 @@ Prefab:
       propertyPath: m_RootOrder
       value: 5
       objectReference: {fileID: 0}
-    - target: {fileID: 13543374, guid: 146d37a4bebe63748bc21353c17de57c, type: 2}
-      propertyPath: m_Material
-      value: 
-      objectReference: {fileID: 13400000, guid: 9db87ce974c9a744ba4bca3e378fc844,
-        type: 2}
     m_RemovedComponents: []
   m_ParentPrefab: {fileID: 100100000, guid: 146d37a4bebe63748bc21353c17de57c, type: 2}
   m_IsPrefabParent: 0
+--- !u!1 &1238523397
+GameObject:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 150244, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 2}
+  m_PrefabInternal: {fileID: 0}
+  serializedVersion: 4
+  m_Component:
+  - 4: {fileID: 1238523398}
+  m_Layer: 0
+  m_Name: EthanRightArm
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1238523398
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 441846, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 2}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 1238523397}
+  m_LocalRotation: {x: -0.07767317, y: 0.0839258, z: -0.0029016384, w: 0.9934359}
+  m_LocalPosition: {x: 0.081806876, y: 0.009300272, z: 0.096346125}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children:
+  - {fileID: 1838792959}
+  m_Father: {fileID: 1375412782}
+  m_RootOrder: 0
 --- !u!1 &1271408779
 GameObject:
   m_ObjectHideFlags: 0
@@ -1775,7 +1787,7 @@ Transform:
   m_PrefabParentObject: {fileID: 496262, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 2}
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 1375412781}
-  m_LocalRotation: {x: 0.5326752, y: 0.070340455, z: 0.83613276, w: -0.110415146}
+  m_LocalRotation: {x: 0.53267515, y: 0.07034045, z: 0.83613265, w: -0.11041513}
   m_LocalPosition: {x: 0.000022271464, y: -0.00006150465, z: 0.026027026}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children:

@@ -4,11 +4,11 @@ using UnityEngine.SceneManagement;
 
 public class PlayerController : MonoBehaviour {
 
-    float speed = 5.0f;
-    Rigidbody rb;
-    Level level;
-    bool reloading = false;
-    int bombLimit = 3;
+    private float speed = 5.0f;
+    private Rigidbody rb;
+    private Level level;
+    private bool reloading = false;
+    private int bombLimit = 3;
 
     // Use this for initialization
     void Start() {

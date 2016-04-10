@@ -3,20 +3,11 @@ using System.Collections.Generic;
 
 public class Level : MonoBehaviour {
 
-    public static Level instance { get; private set; }
+    public const int width = 23;
+    public const int height = 17;
+    public const float SIZE = 2.0f; // game unit size of each tile
 
-    const int width = 23;
-    const int height = 17;
-    public const float SIZE = 2.0f;
-
-    int[,] tiles;
-    int[,] paths;
-    private Queue<Node> frontier;
-    private int pX, pY; // which tile the player is in
-    private int pathsGenerated = 0;
-    private int greatestCost = 0;
-    private int lastX;
-    private int lastY;
+    private int[,] tiles;
 
     public Texture2D[] textures;
     public Object bombPrefab;
@@ -26,26 +17,23 @@ public class Level : MonoBehaviour {
     public Dictionary<int, Bomb> bombs = new Dictionary<int, Bomb>();
 
     public Transform player;
-    Texture2D atlas;
-    Rect[] atlasRects;
+    private Texture2D atlas;
+    private Rect[] atlasRects;
 
     public const int GROUND = 0;
     public const int WALL = 1;
     public const int WALL_CRACKED = 2;
     public const int BOMB = 3;
 
-    Mesh mesh;
-
-    List<int> tris = new List<int>();
-    List<Vector3> verts = new List<Vector3>();
-    List<Vector2> uvs = new List<Vector2>();
-    int triNum = 0;
+    private Mesh mesh;
+    private List<int> tris = new List<int>();
+    private List<Vector3> verts = new List<Vector3>();
+    private List<Vector2> uvs = new List<Vector2>();
+    private int triNum = 0;
 
 
     // Use this for initialization
     void Awake() {
-        instance = this;
-
         atlas = new Texture2D(1024, 1024);
         atlasRects = atlas.PackTextures(textures, 2, 1024);
         atlas.filterMode = FilterMode.Point;
@@ -58,14 +46,14 @@ public class Level : MonoBehaviour {
 
         GenerateLevel();
 
-        frontier = new Queue<Node>();
+
         player = GameObject.Find("Player").transform;
     }
 
     // builds tile array
     public void GenerateLevel() {
         tiles = new int[width, height];
-        paths = new int[width, height];
+        Pathfinder.instance.init(width, height);
 
         // generate board
         for (int x = 0; x < width; x++) {
@@ -186,6 +174,16 @@ public class Level : MonoBehaviour {
         triNum += 4;
     }
 
+    // returns whether or not x,y is inside tile array
+    private bool insideLevel(int x, int y) {
+        return x >= 0 && x < tiles.GetLength(0) && y >= 0 && y < tiles.GetLength(1);
+    }
+
+    // if inside level and on a walkable tile
+    public bool isWalkable(int x, int y) {
+        return insideLevel(x, y) && tiles[x, y] == GROUND;
+    }
+
     private int getHeight(int x, int y) {
         if (!insideLevel(x, y)) {
             return 0;
@@ -215,144 +213,31 @@ public class Level : MonoBehaviour {
         tiles[x, y] = id;
     }
 
-    // if inside level and on a walkable tile
-    private bool isWalkable(int x, int y) {
-        return insideLevel(x, y) && tiles[x, y] == GROUND;
-    }
-
-    // returns whether or not x,y is inside tile array
-    private bool insideLevel(int x, int y) {
-        return x >= 0 && x < tiles.GetLength(0) && y >= 0 && y < tiles.GetLength(1);
-    }
-
-    void Update() {
-        if (!player) {
-            return;
-        }
-
-        pX = (int)(player.position.x / SIZE);
-        pY = (int)(player.position.z / SIZE);
-        // only generate path if player has changed tile position
-        if (pX != lastX || pY != lastY) {
-            generatePath(pX, pY);
-            pathsGenerated++;
-            //Debug.Log(tiles[x][y] + " " + x + " " + y + " " + pathsGenerated);
-        }
-        lastX = pX;
-        lastY = pY;
-    }
-
-    public Vector3 getPath(float xPos, float yPos) {
-        int x = (int)(xPos / SIZE);
-        int y = (int)(yPos / SIZE);
-
-        Vector3 dir = Vector3.zero;
-        if (!isWalkable(x, y) || paths[x, y] < 0 || !player) {
-            return dir;
-        }
-        if (x == pX && y == pY) {
-            return Vector3.down;
-        }
-
-        int shortest = paths[x, y];
-
-        if (Random.value > .5f) {   // random chance to prefer x over y axis and vice versa
-            if (isWalkable(x + 1, y) && paths[x + 1, y] < shortest) {
-                shortest = paths[x + 1, y];
-                dir = getRandomPointInTile(x + 1, y);
-            }
-            if (isWalkable(x - 1, y) && paths[x - 1, y] < shortest) {
-                shortest = paths[x - 1, y];
-                dir = getRandomPointInTile(x - 1, y);
-            }
-            if (isWalkable(x, y + 1) && paths[x, y + 1] < shortest) {
-                shortest = paths[x, y + 1];
-                dir = getRandomPointInTile(x, y + 1);
-            }
-            if (isWalkable(x, y - 1) && paths[x, y - 1] < shortest) {
-                shortest = paths[x, y - 1];
-                dir = getRandomPointInTile(x, y - 1);
-            }
-        } else {
-            if (isWalkable(x, y + 1) && paths[x, y + 1] < shortest) {
-                shortest = paths[x, y + 1];
-                dir = getRandomPointInTile(x, y + 1);
-            }
-            if (isWalkable(x, y - 1) && paths[x, y - 1] < shortest) {
-                shortest = paths[x, y - 1];
-                dir = getRandomPointInTile(x, y - 1);
-            }
-            if (isWalkable(x + 1, y) && paths[x + 1, y] < shortest) {
-                shortest = paths[x + 1, y];
-                dir = getRandomPointInTile(x + 1, y);
-            }
-            if (isWalkable(x - 1, y) && paths[x - 1, y] < shortest) {
-                shortest = paths[x - 1, y];
-                dir = getRandomPointInTile(x - 1, y);
-            }
-        }
-        dir -= new Vector3(xPos, 0f, yPos);
-        return dir.normalized;
-    }
-
-    private Vector3 getRandomPointInTile(int x, int y) {
-        if (!insideLevel(x, y)) {
-            return new Vector3(x * SIZE, 0f, y * SIZE);
-        }
-        return new Vector3(x * SIZE + Random.value * SIZE, 0f, y * SIZE + Random.value * SIZE);
-    }
-
-    private void generatePath(int x, int y) {
-        // clear path
-        for (int i = 0; i < paths.GetLength(0); i++) {
-            for (int j = 0; j < paths.GetLength(1); j++) {
-                paths[i, j] = -1;
-            }
-        }
-
-        frontier.Clear();
-        frontier.Enqueue(new Node(x, y));
-        paths[x, y] = 0;
-        while (frontier.Count > 0) {
-            Node n = frontier.Dequeue();
-            greatestCost = Mathf.Max(greatestCost, paths[n.x, n.y]);
-            // right neigbor
-            if (isWalkable(n.x + 1, n.y) && paths[n.x + 1, n.y] < 0) {
-                frontier.Enqueue(new Node(n.x + 1, n.y));
-                paths[n.x + 1, n.y] = paths[n.x, n.y] + 1;
-            }
-            // left neighbor
-            if (isWalkable(n.x - 1, n.y) && paths[n.x - 1, n.y] < 0) {
-                frontier.Enqueue(new Node(n.x - 1, n.y));
-                paths[n.x - 1, n.y] = paths[n.x, n.y] + 1;
-            }
-            // front neighbor
-            if (isWalkable(n.x, n.y + 1) && paths[n.x, n.y + 1] < 0) {
-                frontier.Enqueue(new Node(n.x, n.y + 1));
-                paths[n.x, n.y + 1] = paths[n.x, n.y] + 1;
-            }
-            // back neighbor
-            if (isWalkable(n.x, n.y - 1) && paths[n.x, n.y - 1] < 0) {
-                frontier.Enqueue(new Node(n.x, n.y - 1));
-                paths[n.x, n.y - 1] = paths[n.x, n.y] + 1;
-            }
-        }
-    }
-
-
-    private struct Node {
-        public int x;
-        public int y;
-
-        public Node(int x, int y) {
-            this.x = x;
-            this.y = y;
-        }
-    }
-
     // returns 1d tile position in array based on pos
     public int getTilePos(Vector3 pos) {
         return (int)(pos.z / SIZE) * width + (int)(pos.x / SIZE);
+    }
+
+    public Vector3 getRandomGroundPosition() {
+        List<int> spots = new List<int>();
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                if (getTile(x, y) == GROUND) {
+                    spots.Add(y * width + x);
+                }
+            }
+        }
+        int r = spots[Random.Range(0, spots.Count)];
+        return new Vector3(r % width, 0.1f, r / width) * SIZE + Vector3.one * SIZE * 0.5f;
+    }
+
+    // with larger radius the random point will be more centered in the square
+    public Vector3 getRandomPointInTile(int x, int y, float radius) {
+        if (!insideLevel(x, y)) {
+            return new Vector3(x * SIZE, 0f, y * SIZE);
+        }
+        float r = SIZE - radius;
+        return new Vector3(x * SIZE + 0.5f * radius + Random.value * r, 0f, y * SIZE + 0.5f * radius + Random.value * r);
     }
 
     // figure out which tile 'pos' is in
@@ -401,45 +286,10 @@ public class Level : MonoBehaviour {
         go.GetComponent<Explosion>().start(x, y, dx, dy, life, this);
     }
 
-    public Vector3 getRandomGroundPosition() {
-        List<int> spots = new List<int>();
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                if (getTile(x, y) == GROUND) {
-                    spots.Add(y * width + x);
-                }
-            }
-        }
-        int r = spots[Random.Range(0, spots.Count)];
-        return new Vector3(r % width, 0.1f, r / width) * SIZE + Vector3.one * SIZE * 0.5f;
-    }
-
     void LateUpdate() {
         if (needToRebuild) {
             BuildMesh();
             needToRebuild = false;
-        }
-    }
-
-    // to visualize path distance
-    void OnDrawGizmos() {
-        bool drawPathData = true;
-        if (paths == null || !drawPathData) {
-            return;
-        }
-        for (int x = 0; x < paths.GetLength(0); x++) {
-            for (int y = 0; y < paths.GetLength(1); y++) {
-                float c = paths[x, y];
-                if (c >= 0) {
-                    Gizmos.color = new Color(1f - c / greatestCost, 0f, c / greatestCost);
-                    if (c == 0) {
-                        Gizmos.color = Color.yellow;
-                    }
-                    float maxH = 5f;
-                    float height = maxH - c / greatestCost * maxH;
-                    Gizmos.DrawCube(new Vector3((x + .5f) * SIZE, height / 2f, (y + .5f) * SIZE), new Vector3(.5f, height, .5f));
-                }
-            }
         }
     }
 

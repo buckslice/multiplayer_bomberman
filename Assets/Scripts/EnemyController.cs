@@ -16,7 +16,7 @@ public class EnemyController : MonoBehaviour {
     // Use this for initialization
     void Start () {
         rb = GetComponent<Rigidbody>();
-        Vector3 p = Level.instance.getRandomGroundPosition();
+        Vector3 p = Pathfinder.instance.getRandomGroundPosition();
         p.y = 0.0f;
         transform.position = p;
 	}
@@ -38,7 +38,7 @@ public class EnemyController : MonoBehaviour {
 
         timeSinceUpdate -= Time.deltaTime;
         if ((x != lastX || y != lastY || path == Vector3.zero) || timeSinceUpdate < 0.0f) {
-            path = Level.instance.getPath(transform.position.x, transform.position.z);
+            path = Pathfinder.instance.getPath(transform.position.x, transform.position.z);
             timeSinceUpdate = 0.5f;
         }
 
@@ -64,7 +64,7 @@ public class EnemyController : MonoBehaviour {
 
     IEnumerator pauseThenReload() {
         yield return new WaitForSeconds(1.0f);
-        Vector3 p = Level.instance.getRandomGroundPosition();
+        Vector3 p = Pathfinder.instance.getRandomGroundPosition();
         p.y = 0.0f;
         transform.position = p;
         respawning = false;
