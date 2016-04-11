@@ -15,13 +15,13 @@ public class Pathfinder : MonoBehaviour {
     public static Pathfinder instance { get; private set; }
 
     public Transform player;    // or whatever you want things to path to
+    public bool drawPathData = false;
 
     private Level level;
     private int[,] paths;
     private Queue<Node> frontier;
     private int greatestCost = 0;
     int px, py; // tile player is in
-    private bool drawPathData = false;
     private float timeSincePathUpdate;
 
     void Awake() {

@@ -322,6 +322,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   player: {fileID: 916114192}
+  drawPathData: 0
 --- !u!1001 &287632495
 Prefab:
   m_ObjectHideFlags: 0
@@ -536,6 +537,14 @@ Prefab:
       propertyPath: m_RootOrder
       value: 5
       objectReference: {fileID: 0}
+    - target: {fileID: 2383350, guid: 1ddad7dcc282fa04e92f92339c7ed9ba, type: 2}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 711a2d0c250dddb43aff4ec0c5ced041, type: 2}
+    - target: {fileID: 2372294, guid: 1ddad7dcc282fa04e92f92339c7ed9ba, type: 2}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: b3a7195ad41cd3044869beab0bbc8fce, type: 2}
     m_RemovedComponents: []
   m_ParentPrefab: {fileID: 100100000, guid: 1ddad7dcc282fa04e92f92339c7ed9ba, type: 2}
   m_IsPrefabParent: 0
@@ -755,7 +764,6 @@ Canvas:
   m_ReceivesEvents: 1
   m_OverrideSorting: 0
   m_OverridePixelPerfect: 0
-  m_SortingBucketNormalizedSize: 0
   m_SortingLayerID: 0
   m_SortingOrder: 0
   m_TargetDisplay: 0

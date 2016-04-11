@@ -238,7 +238,6 @@ public class Level : MonoBehaviour {
         if (!insideLevel(x, y)) {
             return new Vector3(x * SIZE, 0f, y * SIZE);
         }
-        float r = SIZE - radius;
         float minx = x * SIZE + radius;
         float miny = y * SIZE + radius;
         float maxx = (x + 1) * SIZE - radius;
