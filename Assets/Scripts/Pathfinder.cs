@@ -19,12 +19,10 @@ public class Pathfinder : MonoBehaviour {
     private Level level;
     private int[,] paths;
     private Queue<Node> frontier;
-    private int pX, pY; // which tile the player is in
-    private int pathsGenerated = 0;
     private int greatestCost = 0;
-    private int lastX;
-    private int lastY;
-    private bool drawPathData = true;
+    int px, py; // tile player is in
+    private bool drawPathData = false;
+    private float timeSincePathUpdate;
 
     void Awake() {
         instance = this;
@@ -35,38 +33,38 @@ public class Pathfinder : MonoBehaviour {
     public void init(int width, int height) {
         paths = new int[width, height];
     }
-	
-	// Update is called once per frame
-	void Update () {
+
+    // Update is called once per frame
+    void Update() {
         if (!player) {
             return;
         }
 
-        pX = (int)(player.position.x / Level.SIZE);
-        pY = (int)(player.position.z / Level.SIZE);
-        // only generate path if player has changed tile position
-        if (pX != lastX || pY != lastY) {
-            generatePath(pX, pY);
-            pathsGenerated++;
-            //Debug.Log(tiles[x][y] + " " + x + " " + y + " " + pathsGenerated);
+        // calculate tile player is in
+        px = (int)(player.position.x / Level.SIZE);
+        py = (int)(player.position.z / Level.SIZE);
+
+        // calculate path every once and a while
+        timeSincePathUpdate += Time.deltaTime;
+        if (timeSincePathUpdate > 0.5f) {
+            generatePaths(px, py);
+            timeSincePathUpdate = 0.0f;
         }
-        lastX = pX;
-        lastY = pY;
     }
 
     int[] arrx = { 1, -1, 0, 0 };
     int[] arry = { 0, 0, 1, -1 };
-
-    public Vector3 getPath(float xPos, float yPos) {
+    public Vector3 getPath(float xPos, float yPos, float radius = 0.5f) {
         int x = (int)(xPos / Level.SIZE);
         int y = (int)(yPos / Level.SIZE);
 
         Vector3 dir = Vector3.zero;
         if (!level.isWalkable(x, y) || paths[x, y] < 0 || !player) {
-            return dir;
+            return dir;     // if cant find a path to player
         }
-        if (x == pX && y == pY) {
-            return Vector3.down;
+        Vector3 pos = new Vector3(xPos, 0, yPos);
+        if (x == px && y == py) {   // if in same tile as player then move towards them
+            return (player.position - pos).normalized;
         }
 
         int shortest = paths[x, y];
@@ -76,15 +74,59 @@ public class Pathfinder : MonoBehaviour {
             int ty = y + (favorX ? arry[i] : arrx[i]);
             if (level.isWalkable(tx, ty) && paths[tx, ty] < shortest) {
                 shortest = paths[tx, ty];
-                dir = level.getRandomPointInTile(tx, ty, 0.5f);
+                dir = level.getRandomPointInTile(tx, ty, radius);
             }
         }
 
-        dir -= new Vector3(xPos, 0f, yPos);
+        dir -= pos;
         return dir.normalized;
     }
 
-    private void generatePath(int x, int y) {
+    public Vector3 randomWalk(float xPos, float yPos, int lastX, int lastY ) {
+        Vector3 dir = Vector3.zero;
+
+        int x = (int)(xPos / Level.SIZE);
+        int y = (int)(yPos / Level.SIZE);
+
+        if(x == lastX && y == lastY) {
+            Debug.Log("wat");
+            return dir;
+        }
+        Vector3 pos = new Vector3(xPos, 0, yPos);
+        Vector3 lastRes = Vector3.zero;
+        bool favorX = Random.value > 0.5f; // random chance to prefer x over y axis and vice versa
+        for (int i = 0; i < 4; ++i) {
+            int tx = x + (favorX ? arrx[i] : arry[i]);
+            int ty = y + (favorX ? arry[i] : arrx[i]);
+            if (level.isWalkable(tx, ty)) {
+                if (tx == lastX && ty == lastY) {
+                    lastRes = level.getRandomPointInTile(tx, ty, 0.5f);
+                } else {
+                    dir = level.getRandomPointInTile(tx, ty, 0.5f);
+                }
+            }
+        }
+
+        if(dir == Vector3.zero && lastRes != Vector3.zero) {
+            dir = lastRes;
+        }
+        dir -= pos;
+        return dir.normalized;
+    }
+
+    // checks whether the object is fully inside one tile
+    public bool fullyInTile(float xPos, float yPos, float radius) {
+        int x = (int)(xPos / Level.SIZE);
+        int y = (int)(yPos / Level.SIZE);
+        float minx = x * Level.SIZE + radius;
+        float miny = y * Level.SIZE + radius;
+        float maxx = (x + 1) * Level.SIZE - radius;
+        float maxy = (y + 1) * Level.SIZE - radius;
+
+        return xPos >= minx && xPos <= maxx && yPos >= miny && yPos <= maxy;
+    }
+
+    private void generatePaths(int x, int y) {
         // clear path
         for (int i = 0; i < paths.GetLength(0); i++) {
             for (int j = 0; j < paths.GetLength(1); j++) {
@@ -101,7 +143,7 @@ public class Pathfinder : MonoBehaviour {
             // right neigbor
             if (level.isWalkable(n.x + 1, n.y) && paths[n.x + 1, n.y] < 0) {
                 frontier.Enqueue(new Node(n.x + 1, n.y));
-                paths[n.x + 1, n.y] = paths[n.x, n.y] + 1;
+                paths[n.x +1, n.y] = paths[n.x, n.y] + 1;
             }
             // left neighbor
             if (level.isWalkable(n.x - 1, n.y) && paths[n.x - 1, n.y] < 0) {

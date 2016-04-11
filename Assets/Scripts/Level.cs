@@ -46,14 +46,16 @@ public class Level : MonoBehaviour {
 
         GenerateLevel();
 
-
         player = GameObject.Find("Player").transform;
+    }
+
+    void Start() {
+        Pathfinder.instance.init(width, height);
     }
 
     // builds tile array
     public void GenerateLevel() {
         tiles = new int[width, height];
-        Pathfinder.instance.init(width, height);
 
         // generate board
         for (int x = 0; x < width; x++) {
@@ -237,7 +239,11 @@ public class Level : MonoBehaviour {
             return new Vector3(x * SIZE, 0f, y * SIZE);
         }
         float r = SIZE - radius;
-        return new Vector3(x * SIZE + 0.5f * radius + Random.value * r, 0f, y * SIZE + 0.5f * radius + Random.value * r);
+        float minx = x * SIZE + radius;
+        float miny = y * SIZE + radius;
+        float maxx = (x + 1) * SIZE - radius;
+        float maxy = (y + 1) * SIZE - radius;
+        return new Vector3(Random.Range(minx,maxx), 0f, Random.Range(miny,maxy));
     }
 
     // figure out which tile 'pos' is in

@@ -1,20 +1,22 @@
 ﻿using UnityEngine;
 using System.Collections;
-using UnityEngine.SceneManagement;
 
 public class PlayerController : MonoBehaviour {
 
     private float speed = 5.0f;
     private Rigidbody rb;
     private Level level;
-    private bool reloading = false;
     private int bombLimit = 3;
+
+    private SceneLoader loader;
 
     // Use this for initialization
     void Start() {
         rb = GetComponent<Rigidbody>();
         level = GameObject.Find("Level").GetComponent<Level>();
         transform.position = level.getRandomGroundPosition();
+
+        loader = GameObject.Find("Canvas").GetComponent<SceneLoader>();
     }
 
     void Update() {
@@ -43,21 +45,15 @@ public class PlayerController : MonoBehaviour {
     }
 
     void OnTriggerEnter(Collider col) {
-        if (!reloading && col.tag == "Explosion") {
-            reloading = true;
-            //SceneManager.LoadScene (SceneManager.GetActiveScene ().buildIndex);
-            StartCoroutine(pauseThenReload());
+        if (col.tag == "Explosion") {
+            loader.playDeathSequence();
         }
     }
 
-    IEnumerator pauseThenReload() {
-        Time.timeScale = 0.0f;
-        float start = Time.realtimeSinceStartup;
-        while (Time.realtimeSinceStartup < start + 1.0f) {
-            yield return 0;
+    void OnCollisionEnter(Collision c) {
+        if(c.collider.tag == "Enemy") {
+            loader.playDeathSequence();
         }
-        Time.timeScale = 1.0f;
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-        reloading = false;
     }
+
 }
