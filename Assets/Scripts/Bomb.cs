@@ -2,6 +2,7 @@
 using System.Collections;
 
 public class Bomb : MonoBehaviour {
+	private AudioSource sfx;
 
     float fuseTimer = 3.0f;
 
@@ -12,7 +13,7 @@ public class Bomb : MonoBehaviour {
 
     // Use this for initialization
     void Start() {
-
+		sfx = GetComponent<AudioSource> ();
     }
 
     public void init(int x, int y, Level level) {
@@ -30,6 +31,8 @@ public class Bomb : MonoBehaviour {
     }
 
     public void explode() {
+		Debug.Log ("in explode");
+		sfx.Play ();
         level.spawnExplosion(x, y, 0, 0, 3);
         Destroy(gameObject);
     }

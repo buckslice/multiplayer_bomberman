@@ -10,9 +10,10 @@ public class SceneLoader : MonoBehaviour {
     private Text text;
     private bool loading = false;
 
-
+	private AudioSource death_sfx;
     // Use this for initialization
     void Start() {
+		death_sfx = GameObject.FindGameObjectWithTag ("Player").GetComponent<AudioSource> ();
         panel = transform.Find("Panel").gameObject;
         if (panel) {
             fadeImage = panel.GetComponent<Image>();
@@ -31,6 +32,7 @@ public class SceneLoader : MonoBehaviour {
     }
 
     public void playDeathSequence() {
+		death_sfx.Play ();
         if (loading) {
             return;
         }
