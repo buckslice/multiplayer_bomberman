@@ -2,7 +2,7 @@
 using System.Collections;
 
 public class Bomb : MonoBehaviour {
-	private AudioSource sfx;
+	public AudioClip sfx;
 
     float fuseTimer = 3.0f;
 
@@ -13,7 +13,6 @@ public class Bomb : MonoBehaviour {
 
     // Use this for initialization
     void Start() {
-		sfx = GetComponent<AudioSource> ();
     }
 
     public void init(int x, int y, Level level) {
@@ -26,15 +25,14 @@ public class Bomb : MonoBehaviour {
     void Update() {
         fuseTimer -= Time.deltaTime;
         if (fuseTimer <= 0.0f) {
+			AudioSource.PlayClipAtPoint(sfx, GameObject.FindGameObjectWithTag("MainCamera").transform.position);
             explode();
         }
     }
 
     public void explode() {
-		Debug.Log ("in explode");
-		sfx.Play ();
         level.spawnExplosion(x, y, 0, 0, 3);
-        Destroy(gameObject);
+		Destroy(gameObject);
     }
 
     void OnTriggerExit(Collider c) {
