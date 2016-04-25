@@ -7,7 +7,8 @@ public class Level : MonoBehaviour {
     public const int height = 17;
     public const float SIZE = 2.0f; // game unit size of each tile
 
-    private int[,] tiles;
+    //private int[,] tiles;
+    private int[] tiles;
 
     public Texture2D[] textures;
     public Object bombPrefab;
@@ -55,17 +56,17 @@ public class Level : MonoBehaviour {
 
     // builds tile array
     public void GenerateLevel() {
-        tiles = new int[width, height];
+        tiles = new int[width*height];
 
         // generate board
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
-                if (x == 0 || x == width - 1 || y == 0 || y == height - 1 || (x % 2 == 0 && y % 2 == 0)) {
-                    tiles[x, y] = WALL;     // if at edge or random chance
+                if (x == 0 || x == width - 1 || y == 0 || y == height - 1 || (x % 2 == 0 && y % 2 == 0)) { 
+                    setTile(x, y, WALL);    // if at edge or random chance
                 } else if (Random.value < .2f) {
-                    tiles[x, y] = WALL_CRACKED;   // random chance
+                    setTile(x, y, WALL_CRACKED);    // random chance
                 } else {
-                    tiles[x, y] = GROUND;
+                    setTile(x, y, GROUND);
                 }
             }
         }
@@ -85,7 +86,7 @@ public class Level : MonoBehaviour {
 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                int id = tiles[x, y];
+                int id = tiles[x + y * width];
                 float h = getHeight(x, y) * SIZE;
                 float xf = x * SIZE;
                 float yf = y * SIZE;
@@ -178,19 +179,16 @@ public class Level : MonoBehaviour {
 
     // returns whether or not x,y is inside tile array
     private bool insideLevel(int x, int y) {
-        return x >= 0 && x < tiles.GetLength(0) && y >= 0 && y < tiles.GetLength(1);
+        return x >= 0 && x < width && y >= 0 && y < height;
     }
 
     // if inside level and on a walkable tile
     public bool isWalkable(int x, int y) {
-        return insideLevel(x, y) && tiles[x, y] == GROUND;
+        return getTile(x,y) == GROUND;
     }
 
     private int getHeight(int x, int y) {
-        if (!insideLevel(x, y)) {
-            return 0;
-        }
-        switch (tiles[x, y]) {
+        switch (getTile(x,y)) {
             case WALL:
             case WALL_CRACKED:
                 return 1;
@@ -204,7 +202,7 @@ public class Level : MonoBehaviour {
         if (!insideLevel(x, y)) {
             return -1;
         }
-        return tiles[x, y];
+        return tiles[x + y * width];
     }
 
     // sets tile at x,y to id
@@ -212,7 +210,7 @@ public class Level : MonoBehaviour {
         if (!insideLevel(x, y)) {
             return;
         }
-        tiles[x, y] = id;
+        tiles[x + y * width] = id;
     }
 
     // returns 1d tile position in array based on pos
@@ -225,7 +223,7 @@ public class Level : MonoBehaviour {
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 if (getTile(x, y) == GROUND) {
-                    spots.Add(y * width + x);
+                    spots.Add(x + y * width);
                 }
             }
         }
@@ -254,7 +252,7 @@ public class Level : MonoBehaviour {
         if (getTile(x, y) != GROUND) {   // if not on ground or outside of tile array then return
             return;
         }
-        tiles[x, y] = BOMB;
+        setTile(x, y, BOMB);
 
         float xf = x * SIZE + SIZE * 0.5f;
         float yf = y * SIZE + SIZE * 0.5f;

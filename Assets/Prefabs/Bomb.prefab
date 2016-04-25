@@ -145,7 +145,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 40496b049b5cabb4ca1e0043838be1bb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  sfx: {fileID: 8300000, guid: 3cfe758f7f8e74aa3a86e3e796123f9a, type: 3}
+  fuseTimer: 3
+  explosionSound: {fileID: 8300000, guid: 6283a728557f7464c9040c70f0b9b8ab, type: 3}
 --- !u!198 &19840624
 ParticleSystem:
   m_ObjectHideFlags: 1

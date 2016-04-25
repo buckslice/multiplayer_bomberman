@@ -1,6 +1,18 @@
 ﻿using UnityEngine;
 using System.IO;
 
+// packet types
+// byte put at beginning of packet indicating what type of message it is
+// can use this to determine order to read back data in
+public enum PacketType : byte {
+    LOGIN,
+    MESSAGE,
+    TRANSFORM_SYNC,
+    SCORE_UPDATE,
+    // more to be added in future
+
+}
+
 public class Packet {
 
     private byte[] buffer;
@@ -10,20 +22,22 @@ public class Packet {
     private BinaryWriter writer;
     private BinaryReader reader;
     /// <summary>
-    /// Build a packet for writing data
+    /// Build a packet for writing data with default buffer size of 1024 bytes
     /// </summary>
-    public Packet() {
+    public Packet(PacketType type) {
         buffer = new byte[1024];
         stream = new MemoryStream(buffer);
         writer = new BinaryWriter(stream);
+        Write((byte)type);
     }
     /// <summary>
-    /// Build a packet for writing data with specified buffer size
+    /// Build a packet for writing data with specified buffer size in bytes
     /// </summary>
-    public Packet(int bufsize) {
+    public Packet(PacketType type, int bufsize) {
         buffer = new byte[bufsize];
         stream = new MemoryStream(buffer);
         writer = new BinaryWriter(stream);
+        Write((byte)type);
     }
     /// <summary>
     /// Build a packet for reading data
@@ -53,6 +67,9 @@ public class Packet {
     public void Write(byte b) {
         writer.Write(b);
     }
+    public void Write(bool b) {
+        writer.Write(b);
+    }
     public void Write(int i) {
         writer.Write(i);
     }
@@ -76,6 +93,9 @@ public class Packet {
     }
     public byte ReadByte() {
         return reader.ReadByte();
+    }
+    public bool ReadBool() {
+        return reader.ReadBoolean();
     }
     public int ReadInt() {
         return reader.ReadInt32();

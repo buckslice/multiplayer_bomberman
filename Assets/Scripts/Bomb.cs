@@ -2,9 +2,8 @@
 using System.Collections;
 
 public class Bomb : MonoBehaviour {
-	public AudioClip sfx;
-
-    float fuseTimer = 3.0f;
+    public float fuseTimer = 3.0f;
+    public AudioClip explosionSound;
 
     // where bomb is in tile array
     int x;
@@ -25,7 +24,7 @@ public class Bomb : MonoBehaviour {
     void Update() {
         fuseTimer -= Time.deltaTime;
         if (fuseTimer <= 0.0f) {
-			AudioSource.PlayClipAtPoint(sfx, GameObject.FindGameObjectWithTag("MainCamera").transform.position);
+            AudioSource.PlayClipAtPoint(explosionSound, transform.position);
             explode();
         }
     }
