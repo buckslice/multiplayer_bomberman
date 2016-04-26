@@ -47,7 +47,7 @@ public class Level : MonoBehaviour {
 
         GenerateLevel();
 
-        player = GameObject.Find("Player").transform;
+        //player = GameObject.Find("Player").transform;
     }
 
     void Start() {

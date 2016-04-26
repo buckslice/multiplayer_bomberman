@@ -16,6 +16,7 @@ public class GameClient : MonoBehaviour {
     byte channelReliable;
     int maxConnections = 4;
 
+    public int playerNum;
     int port = 8887;
     int key = 420;
     int version = 1;
@@ -123,8 +124,9 @@ public class GameClient : MonoBehaviour {
         switch (pt) {
             case PacketType.LOGIN:
                 waitingForLoginResponse = false;
-                bool success = packet.ReadBool();
-                if (success) {
+                int success = packet.ReadInt();
+                if (success != -1) {
+                    playerNum = success;
                     Debug.Log("CLIENT: authenticated by server, joining game");
                     statusText.text = "Login successful!";
                     statusText.color = Color.yellow;

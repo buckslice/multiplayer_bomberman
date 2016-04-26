@@ -126,7 +126,14 @@ public class GameServer : MonoBehaviour {
 
                 // send login response back to client
                 Packet p = new Packet(PacketType.LOGIN);
-                p.Write(success);
+                if (success)
+                {
+                    p.Write(clientSocket);
+                }
+                else
+                {
+                    p.Write(-1);
+                }
                 sendPacket(p, clientSocket);
 
                 break;
@@ -135,6 +142,4 @@ public class GameServer : MonoBehaviour {
         }
 
     }
-
-
 }
