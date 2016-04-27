@@ -8,6 +8,7 @@ TagManager:
   - Bomb
   - Enemy
   - Networking
+  - Level
   layers:
   - Default
   - TransparentFX

@@ -18,7 +18,7 @@ public class PlayerController : MonoBehaviour {
         transform.position = level.getRandomGroundPosition();
 
         loader = GameObject.Find("Canvas").GetComponent<SceneLoader>();
-        if (playerNum != GameObject.FindGameObjectWithTag("Networking").GetComponent<GameClient>().playerNum)
+        if (GameObject.FindGameObjectWithTag("Networking").GetComponent<GameClient>() != null && playerNum != GameObject.FindGameObjectWithTag("Networking").GetComponent<GameClient>().playerNum)
         {
             Destroy(this);
         }

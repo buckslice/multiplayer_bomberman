@@ -13,6 +13,8 @@ public class GameServer : MonoBehaviour {
     int version = 1;
     int subversion = 0;
 
+    Level level;
+
     int serverSocket = -1;
     List<int> clientConnections = new List<int>();
 
@@ -59,6 +61,15 @@ public class GameServer : MonoBehaviour {
     void Update() {
         checkMessages();
 
+    }
+
+    void OnLevelWasLoaded(int levelNum)
+    {
+        if(levelNum == 1)
+        {
+            level = GameObject.Find("Level").GetComponent<Level>();
+            level.GenerateLevel();
+        }
     }
 
     public void sendPacket(Packet p, int clientID) {
@@ -125,15 +136,22 @@ public class GameServer : MonoBehaviour {
                 }
 
                 // send login response back to client
-                Packet p = new Packet(PacketType.LOGIN);
+                Packet p = new Packet(PacketType.LOGIN,4096);
                 if (success)
                 {
                     p.Write(clientSocket);
+                    int[] tiles = level.getTiles();
+                    p.Write(tiles.Length);
+                    for (int i = 0; i < tiles.Length; i++)
+                    {
+                        p.Write((byte)tiles[i]);
+                    }   
                 }
                 else
                 {
                     p.Write(-1);
                 }
+                Debug.Log(p);
                 sendPacket(p, clientSocket);
 
                 break;

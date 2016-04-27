@@ -44,8 +44,8 @@ public class Level : MonoBehaviour {
 
         Camera.main.transform.position = new Vector3(width / 2.0f, 12.0f, -1.0f) * SIZE;
         Camera.main.transform.rotation = Quaternion.Euler(60.0f, 0.0f, 0.0f);
-
-        GenerateLevel();
+        tiles = new int[width * height];
+        //GenerateLevel();
 
         //player = GameObject.Find("Player").transform;
     }
@@ -56,7 +56,8 @@ public class Level : MonoBehaviour {
 
     // builds tile array
     public void GenerateLevel() {
-        tiles = new int[width*height];
+        tiles = new int[width * height];
+
 
         // generate board
         for (int x = 0; x < width; x++) {
@@ -213,6 +214,11 @@ public class Level : MonoBehaviour {
         tiles[x + y * width] = id;
     }
 
+    public void setTile(int i, int id)
+    {
+        tiles[i] = id;
+    }
+
     // returns 1d tile position in array based on pos
     public int getTilePos(Vector3 pos) {
         return (int)(pos.z / SIZE) * width + (int)(pos.x / SIZE);
@@ -294,6 +300,16 @@ public class Level : MonoBehaviour {
             BuildMesh();
             needToRebuild = false;
         }
+    }
+
+    public int[] getTiles()
+    {
+        return tiles;
+    }
+
+    public void setTiles(int[] t)
+    {
+        tiles = t;
     }
 
 }

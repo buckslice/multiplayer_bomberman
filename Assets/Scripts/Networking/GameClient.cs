@@ -13,6 +13,10 @@ public class GameClient : MonoBehaviour {
     public Text statusText;
     private IEnumerator statusTextAnim;
 
+    Packet loadPacket;
+
+    Level level;
+
     byte channelReliable;
     int maxConnections = 4;
 
@@ -57,6 +61,21 @@ public class GameClient : MonoBehaviour {
     void Update() {
         checkMessages();
     }
+
+    void OnLevelWasLoaded(int levelNum)
+    {
+        if (levelNum == 1)
+        {
+            level = GameObject.Find("Level").GetComponent<Level>();
+            int length = loadPacket.ReadInt();
+            Debug.Log("Starting Client For Loop");
+            for (int i = 0; i < length; i++)
+                level.setTile(i, (int)loadPacket.ReadByte());
+            Debug.Log("Passed Client For Loop");
+            level.BuildMesh();
+        }
+    }
+
 
     // sends a packet to the server
     public void sendPacket(Packet p) {
@@ -125,12 +144,14 @@ public class GameClient : MonoBehaviour {
             case PacketType.LOGIN:
                 waitingForLoginResponse = false;
                 int success = packet.ReadInt();
+                
                 if (success != -1) {
                     playerNum = success;
                     Debug.Log("CLIENT: authenticated by server, joining game");
                     statusText.text = "Login successful!";
                     statusText.color = Color.yellow;
                     SceneManager.LoadScene(1);
+                    loadPacket = packet;
                 } else {
                     statusText.text = "Invalid login info!";
                     flashStatusText(Color.red);
