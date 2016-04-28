@@ -2,8 +2,6 @@
 using System.Collections;
 
 public class PlayerController : MonoBehaviour {
-
-    public int playerNum;
     private float speed = 5.0f;
     private Rigidbody rb;
     private Level level;
@@ -18,10 +16,6 @@ public class PlayerController : MonoBehaviour {
         transform.position = level.getRandomGroundPosition();
 
         loader = GameObject.Find("Canvas").GetComponent<SceneLoader>();
-        if (GameObject.FindGameObjectWithTag("Networking").GetComponent<GameClient>() != null && playerNum != GameObject.FindGameObjectWithTag("Networking").GetComponent<GameClient>().playerNum)
-        {
-            Destroy(this);
-        }
     }
 
     void Update() {

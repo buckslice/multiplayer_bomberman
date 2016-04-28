@@ -5,20 +5,27 @@ using UnityEngine.SceneManagement;
 
 public class GameServer : MonoBehaviour {
 
-    byte channelReliable;
-    int maxConnections = 4;
+    private byte channelReliable;
+    private int maxConnections = 4;
 
-    int port = 8888;
-    int key = 420;
-    int version = 1;
-    int subversion = 0;
+    private int port = 8888;
+    private int key = 420;
+    private int version = 1;
+    private int subversion = 0;
 
-    Level level;
+    private Level level;
 
-    int serverSocket = -1;
-    List<int> clientConnections = new List<int>();
+    private int serverSocket = -1;
+    private List<int> clientConnections = new List<int>();
 
     void OnEnable() {
+        Application.runInBackground = true; // for debugging purposes
+        Destroy(gameObject.GetComponent<GameClient>());
+        DontDestroyOnLoad(gameObject);
+
+        // for testing until we get database working
+        PlayerPrefs.DeleteAll();
+
         NetworkTransport.Init();
         ConnectionConfig config = new ConnectionConfig();
         channelReliable = config.AddChannel(QosType.Reliable);
@@ -31,7 +38,7 @@ public class GameServer : MonoBehaviour {
 
         byte error;
         bool b = NetworkTransport.StartBroadcastDiscovery(
-                     serverSocket, port - 1, key, version, subversion, p.getData(), p.getSize(), 100, out error);
+                     serverSocket, port - 1, key, version, subversion, p.getData(), p.getSize(), 500, out error);
 
         if (!b) {
             Debug.Log("SERVER: start broadcast discovery failed!");
@@ -42,10 +49,6 @@ public class GameServer : MonoBehaviour {
             Debug.Log("SERVER: started but not broadcasting!");
         }
 
-        // remove client script and travel to game scene
-        Application.runInBackground = true; // for debugging purposes
-        Destroy(gameObject.GetComponent<GameClient>());
-        DontDestroyOnLoad(gameObject);
         SceneManager.LoadScene(1);
     }
 
@@ -63,11 +66,10 @@ public class GameServer : MonoBehaviour {
 
     }
 
-    void OnLevelWasLoaded(int levelNum)
-    {
-        if(levelNum == 1)
-        {
-            level = GameObject.Find("Level").GetComponent<Level>();
+    void OnLevelWasLoaded(int levelNum) {
+        GameObject levelGO = GameObject.Find("Level");
+        if (levelGO) {
+            level = levelGO.GetComponent<Level>();
             level.GenerateLevel();
         }
     }
@@ -106,6 +108,7 @@ public class GameServer : MonoBehaviour {
                     Debug.Log("SERVER: client connected: " + recConnectionId);
                     break;
                 case NetworkEventType.DisconnectEvent:
+                    clientConnections.Remove(recConnectionId);
                     Debug.Log("SERVER: client disconnected: " + recConnectionId);
                     break;
                 default:
@@ -136,22 +139,17 @@ public class GameServer : MonoBehaviour {
                 }
 
                 // send login response back to client
-                Packet p = new Packet(PacketType.LOGIN,4096);
-                if (success)
-                {
+                Packet p = new Packet(PacketType.LOGIN, 4096);
+                if (success) {
                     p.Write(clientSocket);
                     int[] tiles = level.getTiles();
                     p.Write(tiles.Length);
-                    for (int i = 0; i < tiles.Length; i++)
-                    {
+                    for (int i = 0; i < tiles.Length; i++) {
                         p.Write((byte)tiles[i]);
-                    }   
-                }
-                else
-                {
+                    }
+                } else {
                     p.Write(-1);
                 }
-                Debug.Log(p);
                 sendPacket(p, clientSocket);
 
                 break;

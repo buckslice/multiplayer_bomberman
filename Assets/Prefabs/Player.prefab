@@ -44,6 +44,7 @@ GameObject:
   - 4: {fileID: 411820}
   - 136: {fileID: 13624690}
   - 54: {fileID: 5479128}
+  - 114: {fileID: 11467100}
   - 114: {fileID: 11472162}
   - 82: {fileID: 8218278}
   m_Layer: 0
@@ -129,7 +130,7 @@ MeshRenderer:
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_Materials:
-  - {fileID: 2100000, guid: 711a2d0c250dddb43aff4ec0c5ced041, type: 2}
+  - {fileID: 2100000, guid: b3a7195ad41cd3044869beab0bbc8fce, type: 2}
   m_SubsetIndices: 
   m_StaticBatchRoot: {fileID: 0}
   m_UseLightProbes: 1
@@ -155,7 +156,7 @@ MeshRenderer:
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_Materials:
-  - {fileID: 2100000, guid: b3a7195ad41cd3044869beab0bbc8fce, type: 2}
+  - {fileID: 2100000, guid: 711a2d0c250dddb43aff4ec0c5ced041, type: 2}
   m_SubsetIndices: 
   m_StaticBatchRoot: {fileID: 0}
   m_UseLightProbes: 1
@@ -245,7 +246,7 @@ AudioSource:
     serializedVersion: 2
     m_Curve:
     - time: 0
-      value: 0
+      value: 1
       inSlope: 0
       outSlope: 0
       tangentMode: 0
@@ -274,6 +275,18 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 0
+--- !u!114 &11467100
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 148040}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e9cc578a77c85c4584c04e9b7e3d734, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerID: 1
 --- !u!114 &11472162
 MonoBehaviour:
   m_ObjectHideFlags: 1

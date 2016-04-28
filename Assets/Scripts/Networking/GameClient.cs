@@ -11,38 +11,32 @@ public class GameClient : MonoBehaviour {
     public InputField nameInputField;
     public InputField passwordInputField;
     public Text statusText;
+
+    public int playerID { get; private set; }
+
     private IEnumerator statusTextAnim;
+    private Packet levelPacket;
 
-    Packet loadPacket;
+    private Level level;
 
-    Level level;
+    private byte channelReliable;
+    private HostTopology topology;
+    private int maxConnections = 4;
 
-    byte channelReliable;
-    int maxConnections = 4;
+    private int port = 8887;
+    private int key = 420;
+    private int version = 1;
+    private int subversion = 0;
 
-    public int playerNum;
-    int port = 8887;
-    int key = 420;
-    int version = 1;
-    int subversion = 0;
+    private int clientSocket = -1;  // this clients socket ID
+    private int serverSocket = -1;  // ID of server this client is connected to    
 
-    int clientSocket = -1;  // this clients socket ID
-    int serverSocket = -1;  // ID of server this client is connected to    
-
-    bool waitingForLoginResponse = false;
+    private bool waitingForLoginResponse = false;
 
     void OnEnable() {
-        NetworkTransport.Init();
-        ConnectionConfig config = new ConnectionConfig();
-        channelReliable = config.AddChannel(QosType.Reliable);
-        HostTopology topology = new HostTopology(config, maxConnections);
-
-        clientSocket = NetworkTransport.AddHost(topology, port);
-        Debug.Log("CLIENT: socket opened: " + clientSocket);
-
-        byte error;
-        NetworkTransport.SetBroadcastCredentials(clientSocket, key, version, subversion, out error);
-        Debug.Log("CLIENT: started");
+        Application.runInBackground = true; // for debugging purposes
+        Destroy(gameObject.GetComponent<GameServer>());
+        DontDestroyOnLoad(gameObject);
 
         // UI stuff
         Destroy(startServerButton);
@@ -52,9 +46,14 @@ public class GameClient : MonoBehaviour {
         statusTextAnim = statusTextAnimRoutine();
         StartCoroutine(statusTextAnim);
 
-        Application.runInBackground = true; // for debugging purposes
-        Destroy(gameObject.GetComponent<GameServer>());
-        DontDestroyOnLoad(gameObject);
+        // network init
+        NetworkTransport.Init();
+        ConnectionConfig config = new ConnectionConfig();
+        channelReliable = config.AddChannel(QosType.Reliable);
+        topology = new HostTopology(config, maxConnections);
+
+        StartCoroutine(tryConnectRoutine());
+
     }
 
     // Update is called once per frame
@@ -62,28 +61,23 @@ public class GameClient : MonoBehaviour {
         checkMessages();
     }
 
-    void OnLevelWasLoaded(int levelNum)
-    {
-        if (levelNum == 1)
-        {
-            level = GameObject.Find("Level").GetComponent<Level>();
-            int length = loadPacket.ReadInt();
-            Debug.Log("Starting Client For Loop");
-            for (int i = 0; i < length; i++)
-                level.setTile(i, (int)loadPacket.ReadByte());
-            Debug.Log("Passed Client For Loop");
+    void OnLevelWasLoaded(int levelNum) {
+        GameObject levelGO = GameObject.Find("Level");
+        if (levelGO && levelNum == 1) {
+            level = levelGO.GetComponent<Level>();
+            int length = levelPacket.ReadInt();
+            for (int i = 0; i < length; i++) {
+                level.setTile(i, levelPacket.ReadByte());
+            }
             level.BuildMesh();
         }
     }
 
-
-    // sends a packet to the server
-    public void sendPacket(Packet p) {
-        byte error;
-        NetworkTransport.Send(clientSocket, serverSocket, channelReliable, p.getData(), p.getSize(), out error);
-    }
-
     public void checkMessages() {
+        if (clientSocket < 0) {
+            return;
+        }
+
         int recConnectionId;    // rec stands for received
         int recChannelId;
         int bsize = 1024;
@@ -107,25 +101,28 @@ public class GameClient : MonoBehaviour {
                     if (serverSocket >= 0) { // already connected to a server
                         break;
                     }
+                    StopCoroutine(statusTextAnim);
                     Debug.Log("CLIENT: found server broadcast!");
+                    statusText.text = "Found Server!";
+                    flashStatusText(Color.yellow);
 
-                    // not doing anything with message currently
+                    // get broadcast message (not doing anything with it currently)
                     NetworkTransport.GetBroadcastConnectionMessage(clientSocket, buffer, bsize, out dataSize, out error);
 
-                    // connect to broadcaster
-                    string address;
-                    int port;
-                    NetworkTransport.GetBroadcastConnectionInfo(clientSocket, out address, out port, out error);
-                    serverSocket = NetworkTransport.Connect(clientSocket, address, port, 0, out error);
+                    // connect to broadcaster by port and address
+                    int rport;
+                    string raddress;
+                    NetworkTransport.GetBroadcastConnectionInfo(clientSocket, out raddress, out rport, out error);
 
-                    StopCoroutine(statusTextAnim);
-                    statusText.text = "Found Server!\nEnter Login Info:";
-                    flashStatusText(Color.green);
-                    nameInputField.gameObject.SetActive(true);
-                    passwordInputField.gameObject.SetActive(true);
-                    joinButton.SetActive(true);
+                    // close client socket on port 8887 so new clients on this comp can connect to broadcast port
+                    NetworkTransport.RemoveHost(clientSocket);
+                    clientSocket = -1;
+                    // reconnect in one second since RemoveHost kind of times out the network momentarily
+                    StartCoroutine(waitThenReconnect(1.0f, raddress, rport));
 
-                    break;
+                    return;
+
+                //break;
                 case NetworkEventType.ConnectEvent:
                     Debug.Log("CLIENT: connected to server");
                     break;
@@ -138,20 +135,26 @@ public class GameClient : MonoBehaviour {
         }
     }
 
+    // sends a packet to the server
+    public void sendPacket(Packet p) {
+        byte error;
+        NetworkTransport.Send(clientSocket, serverSocket, channelReliable, p.getData(), p.getSize(), out error);
+    }
+
     public void receivePacket(Packet packet) {
         PacketType pt = (PacketType)packet.ReadByte();
         switch (pt) {
             case PacketType.LOGIN:
                 waitingForLoginResponse = false;
-                int success = packet.ReadInt();
-                
-                if (success != -1) {
-                    playerNum = success;
+                int playerID = packet.ReadInt();
+
+                if (playerID != -1) {
+                    this.playerID = playerID;
                     Debug.Log("CLIENT: authenticated by server, joining game");
                     statusText.text = "Login successful!";
                     statusText.color = Color.yellow;
                     SceneManager.LoadScene(1);
-                    loadPacket = packet;
+                    levelPacket = packet;
                 } else {
                     statusText.text = "Invalid login info!";
                     flashStatusText(Color.red);
@@ -160,7 +163,39 @@ public class GameClient : MonoBehaviour {
             default:
                 break;
         }
+    }
 
+    IEnumerator tryConnectRoutine() {
+        while (clientSocket < 0) {
+            clientSocket = NetworkTransport.AddHost(topology, port);
+            if (clientSocket < 0) {
+                Debug.Log("CLIENT: port blocked: " + port);
+                yield return new WaitForSeconds(1.0f);
+            }
+        }
+        Debug.Log("CLIENT: socket opened: " + clientSocket);
+
+        byte error;
+        NetworkTransport.SetBroadcastCredentials(clientSocket, key, version, subversion, out error);
+        Debug.Log("CLIENT: started");
+    }
+
+    IEnumerator waitThenReconnect(float waitTime, string remoteAddress, int remotePort) {
+        yield return new WaitForSeconds(waitTime);
+
+        while (clientSocket < 0 && port > 8880) {
+            clientSocket = NetworkTransport.AddHost(topology, --port);
+        }
+        Debug.Log("CLIENT: reconnected on port: " + port);
+        byte error;
+        serverSocket = NetworkTransport.Connect(clientSocket, remoteAddress, remotePort, 0, out error);
+
+        // set up UI for login
+        statusText.text = "Enter Login Info:";
+        flashStatusText(Color.green);
+        nameInputField.gameObject.SetActive(true);
+        passwordInputField.gameObject.SetActive(true);
+        joinButton.SetActive(true);
     }
 
     // tries to join game with current input field credentials
@@ -185,6 +220,8 @@ public class GameClient : MonoBehaviour {
     }
 
 
+
+    // UI ENUMERATORS
     IEnumerator flashStatusTextHandle;
     public void flashStatusText(Color color) {
         if (flashStatusTextHandle != null) {
