@@ -7,8 +7,7 @@ using System.IO;
 public enum PacketType : byte {
     LOGIN,
     MESSAGE,
-    START,
-    TRANSFORM_SYNC,
+    STATE_UPDATE,
     SCORE_UPDATE,
     // more to be added in future
 
@@ -45,18 +44,6 @@ public class Packet {
     /// </summary>
     /// <param name="buffer">data to be read</param>
     public Packet(byte[] buffer) {
-        stream = new MemoryStream(buffer);
-        reader = new BinaryReader(stream);
-    }
-    /// <summary>
-    /// Build a copy of a packet
-    /// </summary>
-    /// <param name="p">packet to be copied</param>
-    public Packet(Packet p) {
-        int pSize = p.getSize();
-        buffer = new byte[pSize];
-        for (int i = 0; i < pSize; ++i)
-            buffer[i] = p.buffer[i];
         stream = new MemoryStream(buffer);
         reader = new BinaryReader(stream);
     }

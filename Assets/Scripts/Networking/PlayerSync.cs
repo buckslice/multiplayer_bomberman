@@ -3,18 +3,21 @@ using System.Collections;
 
 public class PlayerSync : MonoBehaviour {
 
-    public int playerID;
+    public int playerID = -1;
 
-	// Use this for initialization
-	void Awake () {
-        GameObject netGO = GameObject.Find("Networking");
-        if (netGO) {
-            GameClient gc = netGO.GetComponent<GameClient>();
-            if (gc && playerID != gc.playerID) {
-                Destroy(GetComponent<PlayerController>());
-                GetComponent<Rigidbody>().isKinematic = true;
-            }
+    private bool initialized = false;
+    public void initAsRemotePlayer(int playerID) {
+        if (initialized) {
+            return;
         }
+        initialized = true;
+        this.playerID = playerID;
+        Destroy(GetComponent<PlayerController>());
+        GetComponent<Rigidbody>().isKinematic = true;
     }
 
+    public void syncPosition(Vector3 pos) {
+        // TODO add in interpolation
+        transform.position = pos;
+    }
 }

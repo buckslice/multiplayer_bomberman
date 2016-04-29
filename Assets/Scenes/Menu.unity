@@ -353,7 +353,7 @@ MonoBehaviour:
   nameInputField: {fileID: 1669873809}
   passwordInputField: {fileID: 1253436719}
   statusText: {fileID: 753807566}
-  playerNum: 1
+  playerPrefab: {fileID: 148040, guid: 1ddad7dcc282fa04e92f92339c7ed9ba, type: 2}
 --- !u!114 &626212243
 MonoBehaviour:
   m_ObjectHideFlags: 0

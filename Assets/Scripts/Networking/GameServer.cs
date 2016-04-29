@@ -16,7 +16,22 @@ public class GameServer : MonoBehaviour {
     private Level level;
 
     private int serverSocket = -1;
-    private List<int> clientConnections = new List<int>();
+    
+    // list of connected clients
+    private List<int> clients = new List<int>();
+    // list of players in game
+    private List<PlayerState> players = new List<PlayerState>();
+    // maps playerID to their index in player list
+    private Dictionary<int, int> playerIndices = new Dictionary<int, int>();
+
+    class PlayerState {
+        public int id;
+        public Vector3 pos;
+        public PlayerState(int id, Vector3 pos = new Vector3()) {
+            this.id = id;
+            this.pos = pos;
+        }
+    }
 
     void OnEnable() {
         Application.runInBackground = true; // for debugging purposes
@@ -37,10 +52,10 @@ public class GameServer : MonoBehaviour {
         Packet p = MakeTestPacket();
 
         byte error;
-        bool b = NetworkTransport.StartBroadcastDiscovery(
+        bool success = NetworkTransport.StartBroadcastDiscovery(
                      serverSocket, port - 1, key, version, subversion, p.getData(), p.getSize(), 500, out error);
 
-        if (!b) {
+        if (!success) {
             Debug.Log("SERVER: start broadcast discovery failed!");
             Application.Quit();
         } else if (NetworkTransport.IsBroadcastDiscoveryRunning()) {
@@ -62,8 +77,17 @@ public class GameServer : MonoBehaviour {
 
     // Update is called once per frame
     void Update() {
-        checkMessages();
+        // send out packet to all connected players of positions
+        Packet updatePacket = new Packet(PacketType.STATE_UPDATE);
+        updatePacket.Write(players.Count); // first write number of players connected
+        for (int i = 0; i < players.Count; ++i) {   // for each client send their id and position
+            updatePacket.Write(players[i].id);
+            updatePacket.Write(players[i].pos);
+        }
+        broadcastPacket(updatePacket);
 
+
+        checkMessages();
     }
 
     void OnLevelWasLoaded(int levelNum) {
@@ -74,21 +98,21 @@ public class GameServer : MonoBehaviour {
         }
     }
 
-    public void sendPacket(Packet p, int clientID) {
+    private void sendPacket(Packet p, int clientID) {
         byte error;
         NetworkTransport.Send(serverSocket, clientID, channelReliable, p.getData(), p.getSize(), out error);
     }
 
-    public void broadcastPacket(Packet packet) {
-        for (int i = 0; i < clientConnections.Count; i++) {
-            sendPacket(packet, clientConnections[i]);
+    // broadcasts packet to all connected players in game
+    private void broadcastPacket(Packet packet) {
+        for (int i = 0; i < players.Count; i++) {
+            sendPacket(packet, players[i].id);
         }
     }
 
-
     void checkMessages() {
-        int recConnectionId;    // rec stands for received
-        int recChannelId;
+        int recConnectionID;    // rec stands for received
+        int recChannelID;
         int bsize = 1024;
         byte[] buffer = new byte[bsize];
         int dataSize;
@@ -96,20 +120,26 @@ public class GameServer : MonoBehaviour {
 
         while (true) {
             NetworkEventType recEvent = NetworkTransport.ReceiveFromHost(
-                serverSocket, out recConnectionId, out recChannelId, buffer, bsize, out dataSize, out error);
+                serverSocket, out recConnectionID, out recChannelID, buffer, bsize, out dataSize, out error);
             switch (recEvent) {
                 case NetworkEventType.Nothing:
                     return;
                 case NetworkEventType.DataEvent:
-                    receivePacket(new Packet(buffer), recConnectionId);
+                    receivePacket(new Packet(buffer), recConnectionID);
                     break;
                 case NetworkEventType.ConnectEvent:
-                    clientConnections.Add(recConnectionId);
-                    Debug.Log("SERVER: client connected: " + recConnectionId);
+                    clients.Add(recConnectionID);
+                    Debug.Log("SERVER: client connected: " + recConnectionID);
                     break;
                 case NetworkEventType.DisconnectEvent:
-                    clientConnections.Remove(recConnectionId);
-                    Debug.Log("SERVER: client disconnected: " + recConnectionId);
+                    clients.Remove(recConnectionID);
+                    players.RemoveAt(playerIndices[recConnectionID]);
+                    // recalculate indices for all players
+                    playerIndices.Clear();
+                    for (int i = 0; i < players.Count; ++i) {
+                        playerIndices[players[i].id] = i;
+                    }
+                    Debug.Log("SERVER: client disconnected: " + recConnectionID);
                     break;
                 default:
                     break;
@@ -119,7 +149,7 @@ public class GameServer : MonoBehaviour {
 
     }
 
-    void receivePacket(Packet packet, int clientSocket) {
+    void receivePacket(Packet packet, int clientID) {
         PacketType pt = (PacketType)packet.ReadByte();
         switch (pt) {
             case PacketType.LOGIN:
@@ -139,19 +169,32 @@ public class GameServer : MonoBehaviour {
                 }
 
                 // send login response back to client
-                Packet p = new Packet(PacketType.LOGIN, 4096);
+                Packet p = new Packet(PacketType.LOGIN);
                 if (success) {
-                    p.Write(clientSocket);
+                    p.Write(clientID);
                     int[] tiles = level.getTiles();
                     p.Write(tiles.Length);
                     for (int i = 0; i < tiles.Length; i++) {
                         p.Write((byte)tiles[i]);
                     }
+                    // send player their spawn point
+                    Vector3 spawn = level.getRandomGroundPosition();
+                    p.Write(spawn);
+
+                    // add player to game (and start sending them state info)
+                    playerIndices[clientID] = players.Count;
+                    players.Add(new PlayerState(clientID, spawn));
+
                 } else {
                     p.Write(-1);
                 }
-                sendPacket(p, clientSocket);
+                sendPacket(p, clientID);
 
+                break;
+
+            case PacketType.STATE_UPDATE:
+                Debug.Assert(playerIndices.ContainsKey(clientID));
+                players[playerIndices[clientID]].pos = packet.ReadVector3();
                 break;
             default:
                 break;

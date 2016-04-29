@@ -62,7 +62,7 @@ public class Level : MonoBehaviour {
         // generate board
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
-                if (x == 0 || x == width - 1 || y == 0 || y == height - 1 || (x % 2 == 0 && y % 2 == 0)) { 
+                if (x == 0 || x == width - 1 || y == 0 || y == height - 1 || (x % 2 == 0 && y % 2 == 0)) {
                     setTile(x, y, WALL);    // if at edge or random chance
                 } else if (Random.value < .2f) {
                     setTile(x, y, WALL_CRACKED);    // random chance
@@ -185,11 +185,11 @@ public class Level : MonoBehaviour {
 
     // if inside level and on a walkable tile
     public bool isWalkable(int x, int y) {
-        return getTile(x,y) == GROUND;
+        return getTile(x, y) == GROUND;
     }
 
     private int getHeight(int x, int y) {
-        switch (getTile(x,y)) {
+        switch (getTile(x, y)) {
             case WALL:
             case WALL_CRACKED:
                 return 1;
@@ -214,8 +214,7 @@ public class Level : MonoBehaviour {
         tiles[x + y * width] = id;
     }
 
-    public void setTile(int i, int id)
-    {
+    public void setTile(int i, int id) {
         tiles[i] = id;
     }
 
@@ -246,7 +245,7 @@ public class Level : MonoBehaviour {
         float miny = y * SIZE + radius;
         float maxx = (x + 1) * SIZE - radius;
         float maxy = (y + 1) * SIZE - radius;
-        return new Vector3(Random.Range(minx,maxx), 0f, Random.Range(miny,maxy));
+        return new Vector3(Random.Range(minx, maxx), 0f, Random.Range(miny, maxy));
     }
 
     // figure out which tile 'pos' is in
@@ -302,14 +301,8 @@ public class Level : MonoBehaviour {
         }
     }
 
-    public int[] getTiles()
-    {
+    public int[] getTiles() {
         return tiles;
-    }
-
-    public void setTiles(int[] t)
-    {
-        tiles = t;
     }
 
 }

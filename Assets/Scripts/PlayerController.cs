@@ -8,13 +8,13 @@ public class PlayerController : MonoBehaviour {
     private int bombLimit = 3;
 
     private SceneLoader loader;
+    private AudioSource source;
 
     // Use this for initialization
     void Start() {
+        source = GetComponent<AudioSource>();
         rb = GetComponent<Rigidbody>();
         level = GameObject.Find("Level").GetComponent<Level>();
-        transform.position = level.getRandomGroundPosition();
-
         loader = GameObject.Find("Canvas").GetComponent<SceneLoader>();
     }
 
@@ -26,7 +26,7 @@ public class PlayerController : MonoBehaviour {
 
         }
         if (Input.GetKeyDown(KeyCode.Backspace)) {  // reset
-            level.GenerateLevel();
+            //level.GenerateLevel();
             transform.position = level.getRandomGroundPosition();
             rb.velocity = Vector3.zero;
         }
@@ -45,13 +45,15 @@ public class PlayerController : MonoBehaviour {
 
     void OnTriggerEnter(Collider col) {
         if (col.tag == "Explosion") {
-            loader.playDeathSequence();
+            source.Play();
+            //loader.playDeathSequence();
         }
     }
 
     void OnCollisionEnter(Collision c) {
         if(c.collider.tag == "Enemy") {
-            loader.playDeathSequence();
+            source.Play();
+            //loader.playDeathSequence();
         }
     }
 
