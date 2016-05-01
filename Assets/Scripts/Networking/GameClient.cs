@@ -73,6 +73,17 @@ public class GameClient : MonoBehaviour {
             p.Write(myPlayer.transform.position);
             sendPacket(p);
         }
+        // if in menu scene then make pressing tab switch
+        // between name and password input fields
+        if (SceneManager.GetActiveScene().buildIndex == 0) {
+            if (Input.GetKeyDown(KeyCode.Tab)) {
+                if (nameInputField.isFocused) {
+                    passwordInputField.ActivateInputField();
+                } else {
+                    nameInputField.ActivateInputField();
+                }
+            }
+        }
 
         checkMessages();
     }

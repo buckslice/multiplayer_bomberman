@@ -24,6 +24,8 @@ public class GameServer : MonoBehaviour {
     // maps playerID to their index in player list
     private Dictionary<int, int> playerIndices = new Dictionary<int, int>();
 
+    private DatabaseUtil dbUtil;
+
     class PlayerState {
         public int id;
         public Vector3 pos;
@@ -38,8 +40,11 @@ public class GameServer : MonoBehaviour {
         Destroy(gameObject.GetComponent<GameClient>());
         DontDestroyOnLoad(gameObject);
 
+        // open up database
+        dbUtil = gameObject.AddComponent<DatabaseUtil>();
+
         // for testing until we get database working
-        PlayerPrefs.DeleteAll();
+        //PlayerPrefs.DeleteAll();
 
         NetworkTransport.Init();
         ConnectionConfig config = new ConnectionConfig();
@@ -85,7 +90,6 @@ public class GameServer : MonoBehaviour {
             updatePacket.Write(players[i].pos);
         }
         broadcastPacket(updatePacket);
-
 
         checkMessages();
     }
@@ -133,13 +137,17 @@ public class GameServer : MonoBehaviour {
                     break;
                 case NetworkEventType.DisconnectEvent:
                     clients.Remove(recConnectionID);
-                    players.RemoveAt(playerIndices[recConnectionID]);
-                    // recalculate indices for all players
-                    playerIndices.Clear();
-                    for (int i = 0; i < players.Count; ++i) {
-                        playerIndices[players[i].id] = i;
-                    }
                     Debug.Log("SERVER: client disconnected: " + recConnectionID);
+
+                    // recalculate indices for all players if needed
+                    if (playerIndices.ContainsKey(recConnectionID)) {
+                        players.RemoveAt(playerIndices[recConnectionID]);
+                        playerIndices.Clear();
+                        for (int i = 0; i < players.Count; ++i) {
+                            playerIndices[players[i].id] = i;
+                        }
+                    }
+
                     break;
                 default:
                     break;
@@ -155,22 +163,14 @@ public class GameServer : MonoBehaviour {
             case PacketType.LOGIN:
                 string name = packet.ReadString();
                 string password = packet.ReadString();
-                bool success = true;
-                if (PlayerPrefs.HasKey(name)) {
-                    if (password == PlayerPrefs.GetString(name)) {
-                        Debug.Log("SERVER: player login accepted");
-                    } else {
-                        success = false;
-                        Debug.Log("SERVER: player login denied, wrong password");
-                    }
-                } else {
-                    Debug.Log("SERVER: new player \"" + name + "\" joined with password \"" + password + "\"");
-                    PlayerPrefs.SetString(name, password);
-                }
+
+                // queries database for login info and returns success
+                // will add new entry if name not found
+                bool loginSuccessful = dbUtil.tryLogin(name, password);
 
                 // send login response back to client
                 Packet p = new Packet(PacketType.LOGIN);
-                if (success) {
+                if (loginSuccessful) {
                     p.Write(clientID);
                     int[] tiles = level.getTiles();
                     p.Write(tiles.Length);

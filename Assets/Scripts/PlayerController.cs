@@ -7,7 +7,7 @@ public class PlayerController : MonoBehaviour {
     private Level level;
     private int bombLimit = 3;
 
-    private SceneLoader loader;
+    //private SceneLoader loader;
     private AudioSource source;
 
     // Use this for initialization
@@ -15,7 +15,7 @@ public class PlayerController : MonoBehaviour {
         source = GetComponent<AudioSource>();
         rb = GetComponent<Rigidbody>();
         level = GameObject.Find("Level").GetComponent<Level>();
-        loader = GameObject.Find("Canvas").GetComponent<SceneLoader>();
+        //loader = GameObject.Find("Canvas").GetComponent<SceneLoader>();
     }
 
     void Update() {
