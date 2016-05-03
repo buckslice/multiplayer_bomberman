@@ -8,7 +8,9 @@ public enum PacketType : byte {
     LOGIN,
     MESSAGE,
     STATE_UPDATE,
-    SCORE_UPDATE,
+    SPAWN_BOMB,
+    PLAYER_DIED,
+    RESTART_GAME,
     // more to be added in future
 
 }
@@ -19,14 +21,14 @@ public class Packet {
 
     private MemoryStream stream;
 
-    private BinaryWriter writer;
-    private BinaryReader reader;
+    private BinaryWriter writer = null;
+    private BinaryReader reader = null;
     /// <summary>
     /// Build a packet for writing data with default buffer size of 1024 bytes
     /// </summary>
     public Packet(PacketType type) {
         buffer = new byte[1024];
-        stream = new MemoryStream(buffer);
+        stream = new MemoryStream(buffer, true);
         writer = new BinaryWriter(stream);
         Write((byte)type);
     }
@@ -35,7 +37,7 @@ public class Packet {
     /// </summary>
     public Packet(PacketType type, int bufsize) {
         buffer = new byte[bufsize];
-        stream = new MemoryStream(buffer);
+        stream = new MemoryStream(buffer, true);
         writer = new BinaryWriter(stream);
         Write((byte)type);
     }
@@ -44,9 +46,26 @@ public class Packet {
     /// </summary>
     /// <param name="buffer">data to be read</param>
     public Packet(byte[] buffer) {
-        stream = new MemoryStream(buffer);
+        stream = new MemoryStream(buffer, false);
         reader = new BinaryReader(stream);
     }
+
+    //// build a packet as a copy of another packet
+    //public Packet(Packet p) {
+    //    if (p.stream.CanWrite) {
+    //        buffer = new byte[p.buffer.Length];
+    //        System.Array.Copy(p.buffer, 0, buffer, 0, p.stream.Position);
+    //        stream = new MemoryStream(buffer);
+    //        stream.Seek(p.stream.Position, SeekOrigin.Begin);
+    //        writer = new BinaryWriter(stream);
+    //    } else {
+    //        //stream = new MemoryStream(p.stream.GetBuffer(), false);
+    //        //stream.Seek(p.stream.Position, SeekOrigin.Begin);
+    //        //reader = new BinaryReader(stream);
+    //        stream = p.stream;
+    //        reader = p.reader;
+    //    }
+    //}
 
     // add more methods here as needed (wish we had templates lol)
     public void Write(string s) {

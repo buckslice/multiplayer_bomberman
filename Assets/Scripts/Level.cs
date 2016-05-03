@@ -7,24 +7,26 @@ public class Level : MonoBehaviour {
     public const int height = 17;
     public const float SIZE = 2.0f; // game unit size of each tile
 
-    //private int[,] tiles;
-    private int[] tiles;
-
-    public Texture2D[] textures;
-    public Object bombPrefab;
-    public Object explosionPrefab;
-    public bool needToRebuild { private get; set; }
-
-    public Dictionary<int, Bomb> bombs = new Dictionary<int, Bomb>();
-
-    public Transform player;
-    private Texture2D atlas;
-    private Rect[] atlasRects;
-
     public const int GROUND = 0;
     public const int WALL = 1;
     public const int WALL_CRACKED = 2;
     public const int BOMB = 3;
+
+    private int[] tiles;
+
+    [SerializeField]
+    private Texture2D[] textures;
+    [SerializeField]
+    private Object bombPrefab;
+    [SerializeField]
+    private Object explosionPrefab;
+
+    public bool needToRebuild { private get; set; }
+
+    private Dictionary<int, Bomb> bombs = new Dictionary<int, Bomb>();
+
+    private Texture2D atlas;
+    private Rect[] atlasRects;
 
     private Mesh mesh;
     private List<int> tris = new List<int>();
@@ -46,8 +48,6 @@ public class Level : MonoBehaviour {
         Camera.main.transform.rotation = Quaternion.Euler(60.0f, 0.0f, 0.0f);
         tiles = new int[width * height];
         //GenerateLevel();
-
-        //player = GameObject.Find("Player").transform;
     }
 
     void Start() {
@@ -250,7 +250,7 @@ public class Level : MonoBehaviour {
 
     // figure out which tile 'pos' is in
     // then place bomb prefab there
-    public void placeBomb(Vector3 pos) {
+    public void placeBomb(Vector3 pos, bool thisPlayers) {
         int x = (int)(pos.x / SIZE);
         int y = (int)(pos.z / SIZE);
 
@@ -265,6 +265,7 @@ public class Level : MonoBehaviour {
 
         GameObject go = (GameObject)Instantiate(bombPrefab, spawn, Quaternion.identity);
         go.name = "Bomb";
+        go.tag = thisPlayers ? "PlayerBomb" : "Bomb";
         Bomb b = go.GetComponent<Bomb>();
         b.init(x, y, this);
         bombs.Add(y * width + x, b);

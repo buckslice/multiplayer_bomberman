@@ -4,19 +4,19 @@ using System.Data;
 
 public class DatabaseUtil : MonoBehaviour {
 
-    private string conn = "URI=file:" + Application.dataPath + "/Database/AccountInfo.s3db";
+    private string conn = "URI=file:" + Application.streamingAssetsPath + "/AccountInfo.s3db";
 
     private IDbConnection dbconn;
     private IDbCommand cmd;
     private IDataReader reader;
 
     // Use this for initialization
-    void Start() {
+    void Awake() {
         dbconn = new SqliteConnection(conn);
         dbconn.Open();
         cmd = dbconn.CreateCommand();
 
-        // reset accounts each time game is run for now
+        // reset database each time game is run (for now)
         cmd.CommandText = "DROP TABLE IF EXISTS Accounts";
         cmd.ExecuteNonQuery();
 
@@ -41,7 +41,7 @@ public class DatabaseUtil : MonoBehaviour {
         reader.Close();
         // if found a password at that name then return whether passwords match
         if (p != "") {
-            if(password == p) {
+            if (password == p) {
                 Debug.Log("SERVER: player login accepted");
                 return true;
             } else {

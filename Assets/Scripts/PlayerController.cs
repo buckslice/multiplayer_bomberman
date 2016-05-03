@@ -4,10 +4,10 @@ using System.Collections;
 public class PlayerController : MonoBehaviour {
     private float speed = 5.0f;
     private Rigidbody rb;
-    private Level level;
     private int bombLimit = 3;
 
-    //private SceneLoader loader;
+    public PlayerSync playerSync { private get; set; }
+    private Level level;
     private AudioSource source;
 
     // Use this for initialization
@@ -15,20 +15,14 @@ public class PlayerController : MonoBehaviour {
         source = GetComponent<AudioSource>();
         rb = GetComponent<Rigidbody>();
         level = GameObject.Find("Level").GetComponent<Level>();
-        //loader = GameObject.Find("Canvas").GetComponent<SceneLoader>();
     }
 
     void Update() {
         if (Input.GetKeyDown(KeyCode.Space)) {  // lay bomb
-            if (GameObject.FindGameObjectsWithTag("Bomb").Length < bombLimit) {
-                level.placeBomb(transform.position);
+            if (GameObject.FindGameObjectsWithTag("PlayerBomb").Length < bombLimit) {
+                level.placeBomb(transform.position, true);
+                playerSync.sendBomb(transform.position);
             }
-
-        }
-        if (Input.GetKeyDown(KeyCode.Backspace)) {  // reset
-            //level.GenerateLevel();
-            transform.position = level.getRandomGroundPosition();
-            rb.velocity = Vector3.zero;
         }
     }
 
@@ -46,14 +40,14 @@ public class PlayerController : MonoBehaviour {
     void OnTriggerEnter(Collider col) {
         if (col.tag == "Explosion") {
             source.Play();
-            //loader.playDeathSequence();
+            playerSync.sendDeath();
+            Destroy(gameObject);
         }
     }
 
     void OnCollisionEnter(Collision c) {
         if(c.collider.tag == "Enemy") {
             source.Play();
-            //loader.playDeathSequence();
         }
     }
 

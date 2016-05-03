@@ -14,12 +14,7 @@ public class GameClient : MonoBehaviour {
     public Text statusText;
     public GameObject playerPrefab;
 
-    // socket id on server
-    public int playerID { get; private set; }
-
     private IEnumerator statusTextAnim;
-
-    private Level level;
 
     private byte channelReliable;
     private HostTopology topology;
@@ -32,18 +27,19 @@ public class GameClient : MonoBehaviour {
 
     private int clientSocket = -1;  // this clients socket ID
     private int serverSocket = -1;  // ID of server this client is connected to    
+    private int playerID = -1;      // ID of player on server
 
     private bool waitingForLoginResponse = false;
 
-    private PlayerSync myPlayer = null;
     private List<PlayerSync> otherPlayers = new List<PlayerSync>();
 
-    private int[] levelOnLoad;
+    private int[] levelLoad;
     private Vector3 spawn;
-    private bool gameFullyLoaded;
+    private Level level;
+
+    private bool restartingGame = true;
 
     void OnEnable() {
-        playerID = -1;
         Application.runInBackground = true; // for debugging purposes
         Destroy(gameObject.GetComponent<GameServer>());
         DontDestroyOnLoad(gameObject);
@@ -68,13 +64,9 @@ public class GameClient : MonoBehaviour {
 
     // Update is called once per frame
     void Update() {
-        if (myPlayer) {
-            Packet p = new Packet(PacketType.STATE_UPDATE);
-            p.Write(myPlayer.transform.position);
-            sendPacket(p);
-        }
         // if in menu scene then make pressing tab switch
-        // between name and password input fields
+        // between name and password input fields and make
+        // hitting enter try to join with current credentials
         if (SceneManager.GetActiveScene().buildIndex == 0) {
             if (Input.GetKeyDown(KeyCode.Tab)) {
                 if (nameInputField.isFocused) {
@@ -82,6 +74,9 @@ public class GameClient : MonoBehaviour {
                 } else {
                     nameInputField.ActivateInputField();
                 }
+            }
+            if (Input.GetKeyDown(KeyCode.Return)) {
+                tryJoiningGame();
             }
         }
 
@@ -92,18 +87,24 @@ public class GameClient : MonoBehaviour {
         GameObject levelGO = GameObject.Find("Level");
         if (levelGO && levelNum == 1) {
             level = levelGO.GetComponent<Level>();
-            for (int i = 0; i < levelOnLoad.Length; ++i) {
-                level.setTile(i, levelOnLoad[i]);
+
+            for (int i = 0; i < levelLoad.Length; ++i) {
+                level.setTile(i, levelLoad[i]);
             }
             level.BuildMesh();
 
             // spawn player for this client
             GameObject pgo = (GameObject)Instantiate(playerPrefab, spawn, Quaternion.identity);
-            myPlayer = pgo.GetComponent<PlayerSync>();
-            myPlayer.playerID = playerID;
+            pgo.GetComponent<PlayerSync>().init(playerID, this);
 
-            gameFullyLoaded = true;
+            // delay starting the game a little so the client can get rid of old state packets from server
+            StartCoroutine(setFullyLoaded(0.3f));
         }
+    }
+
+    IEnumerator setFullyLoaded(float t) {
+        yield return new WaitForSeconds(t);
+        restartingGame = false;
     }
 
     public void checkMessages() {
@@ -143,15 +144,15 @@ public class GameClient : MonoBehaviour {
                     NetworkTransport.GetBroadcastConnectionMessage(clientSocket, buffer, bsize, out dataSize, out error);
 
                     // connect to broadcaster by port and address
-                    int rport;
-                    string raddress;
-                    NetworkTransport.GetBroadcastConnectionInfo(clientSocket, out raddress, out rport, out error);
+                    int broadcastPort;
+                    string broadcastAddress;
+                    NetworkTransport.GetBroadcastConnectionInfo(clientSocket, out broadcastAddress, out broadcastPort, out error);
 
                     // close client socket on port 8887 so new clients on this comp can connect to broadcast port
                     NetworkTransport.RemoveHost(clientSocket);
                     clientSocket = -1;
                     // reconnect in one second since RemoveHost kind of times out the network momentarily
-                    StartCoroutine(waitThenReconnect(1.0f, raddress, rport));
+                    StartCoroutine(waitThenReconnect(0.5f, broadcastAddress, broadcastPort));
 
                     return;
 
@@ -161,6 +162,11 @@ public class GameClient : MonoBehaviour {
                     break;
                 case NetworkEventType.DisconnectEvent:
                     Debug.Log("CLIENT: disconnected from server");
+                    // if was at login screen then reset
+                    if (SceneManager.GetActiveScene().buildIndex == 0 && nameInputField.IsActive()) {
+                        ResetToMenu.Reset();
+                    }
+
                     break;
                 default:
                     break;
@@ -176,6 +182,12 @@ public class GameClient : MonoBehaviour {
 
     public void receivePacket(Packet packet) {
         PacketType pt = (PacketType)packet.ReadByte();
+        // make sure you dont process state updates if game is not yet fully loaded
+        // once you login successfully server starts sending you game states
+        if (restartingGame && pt != PacketType.LOGIN) {
+            return;
+        }
+
         int id;
         switch (pt) {
             case PacketType.LOGIN:
@@ -187,12 +199,11 @@ public class GameClient : MonoBehaviour {
                     statusText.text = "Login successful!";
                     statusText.color = Color.yellow;
 
-                    // save level and spawn point info
-                    int length = packet.ReadInt();
-                    levelOnLoad = new int[length];
-                    for (int i = 0; i < length; i++) {
-                        levelOnLoad[i] = packet.ReadByte();
+                    levelLoad = new int[packet.ReadInt()];
+                    for (int i = 0; i < levelLoad.Length; ++i) {
+                        levelLoad[i] = packet.ReadByte();
                     }
+                    // spawn player for this client
                     spawn = packet.ReadVector3();
 
                     // load into next scene
@@ -205,18 +216,14 @@ public class GameClient : MonoBehaviour {
                 break;
 
             case PacketType.STATE_UPDATE:
-                // make sure you dont process state updates if game is not yet fully loaded
-                // once you login successfully server starts sending you game states
-                if (!gameFullyLoaded) {
-                    return;
-                }
-
-                int numPlayers = packet.ReadInt();
-                for (int i = 0, index = 0; index < numPlayers; ++index) {
+                int numAlivePlayers = packet.ReadInt();
+                bool myPlayerAlive = false;
+                for (int i = 0, index = 0; index < numAlivePlayers; ++index) {
                     id = packet.ReadInt();
                     Vector3 pos = packet.ReadVector3();
                     if (playerID == id) {
-                        continue; // ignore own position given from server
+                        myPlayerAlive = true;
+                        continue; // ignore own position given from server for now
                     }
 
                     // if player id mismatch then delete because he got disconnected
@@ -228,22 +235,52 @@ public class GameClient : MonoBehaviour {
                     if (i == otherPlayers.Count) {
                         GameObject pgo = (GameObject)Instantiate(playerPrefab, pos, Quaternion.identity);
                         PlayerSync newPlayer = pgo.GetComponent<PlayerSync>();
-                        newPlayer.initAsRemotePlayer(id);
+                        newPlayer.init(id);
                         otherPlayers.Add(newPlayer);
                     } else {  // otherwise sync positions of other players
-                        otherPlayers[i].syncPosition(pos);
+                        otherPlayers[i].updatePosition(pos);
                     }
 
                     i++;    // increment index into otherPlayers list
                 }
+                if (myPlayerAlive) {    // if my player is alive then take one off from numPlayers
+                    numAlivePlayers -= 1;
+                }
                 // make sure to remove old players off end of list
-                while (otherPlayers.Count >= numPlayers) {
+                while (otherPlayers.Count > 0 && otherPlayers.Count > numAlivePlayers) {
                     Destroy(otherPlayers[otherPlayers.Count - 1].gameObject);
                     otherPlayers.RemoveAt(otherPlayers.Count - 1);
                 }
 
                 break;
 
+            case PacketType.SPAWN_BOMB:
+                level.placeBomb(packet.ReadVector3(), false);
+                break;
+
+            case PacketType.RESTART_GAME:
+                restartingGame = true;
+                int winner = packet.ReadInt();
+
+                // clear otherplayers list
+                for(int i = 0; i < otherPlayers.Count; ++i) {
+                    if(otherPlayers[i].playerID != winner) {
+                        Destroy(otherPlayers[i].gameObject);
+                    }
+                }
+                otherPlayers.Clear();
+
+                // save level data
+                levelLoad = new int[packet.ReadInt()];
+                for (int i = 0; i < levelLoad.Length; ++i) {
+                    levelLoad[i] = packet.ReadByte();
+                }
+                // save player spawn
+                spawn = packet.ReadVector3();
+                string message = packet.ReadString();
+                FindObjectOfType<SceneLoader>().fadeOutWithText(message);
+
+                break;
             default:
                 break;
         }
@@ -257,18 +294,21 @@ public class GameClient : MonoBehaviour {
                 yield return new WaitForSeconds(1.0f);
             }
         }
-        Debug.Log("CLIENT: socket opened: " + clientSocket);
-
         byte error;
         NetworkTransport.SetBroadcastCredentials(clientSocket, key, version, subversion, out error);
-        Debug.Log("CLIENT: started");
+        Debug.Log("CLIENT: connected on port: " + port);
     }
 
     IEnumerator waitThenReconnect(float waitTime, string remoteAddress, int remotePort) {
         yield return new WaitForSeconds(waitTime);
 
-        while (clientSocket < 0 && port > 8880) {
+        while (clientSocket < 0 && port > 8870) { // limit to 16 players max
             clientSocket = NetworkTransport.AddHost(topology, --port);
+        }
+        if (port <= 8870) { // just incase this happens
+            Debug.Log("CLIENT: no open ports, quiting");
+            ResetToMenu.Reset();
+            yield break;
         }
         Debug.Log("CLIENT: reconnected on port: " + port);
         byte error;

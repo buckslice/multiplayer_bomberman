@@ -243,7 +243,6 @@ MonoBehaviour:
   - {fileID: 2800000, guid: 00a42d8add09bb14eace59dd5625d64a, type: 3}
   bombPrefab: {fileID: 110834, guid: a7e999a64e5d08049b1ce03d9eaa5460, type: 2}
   explosionPrefab: {fileID: 192212, guid: 5be46feecda542a4d91a343ccb071629, type: 2}
-  player: {fileID: 0}
 --- !u!4 &279585428
 Transform:
   m_ObjectHideFlags: 0
@@ -358,7 +357,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1318250876
 Transform:
   m_ObjectHideFlags: 0
@@ -570,7 +569,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 0, b: 0, a: 1}
+  m_Color: {r: 0, g: 0.872, b: 1, a: 1}
   m_RaycastTarget: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
@@ -590,7 +589,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: YOU DIED
+  m_Text: 
 --- !u!222 &1844651782
 CanvasRenderer:
   m_ObjectHideFlags: 0

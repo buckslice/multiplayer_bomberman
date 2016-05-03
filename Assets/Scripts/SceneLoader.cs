@@ -23,23 +23,18 @@ public class SceneLoader : MonoBehaviour {
         StartCoroutine(fade(true, false, 1.0f));
     }
 
-    void Update() {
-        if (Input.GetKeyDown(KeyCode.Escape)) {
-            Application.Quit();
-        }
-    }
-
-    public void playDeathSequence() {
+    public void fadeOutWithText(string t) {
         if (loading) {
             return;
         }
         text.gameObject.SetActive(true);
+        text.text = t;
         loading = true;
         StartCoroutine(fadeOutReloadRoutine());
-
     }
+
     private IEnumerator fadeOutReloadRoutine() {
-        yield return fade(false, true, 1.0f);
+        yield return fade(false, false, 2.0f);
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 

@@ -13,10 +13,8 @@ public class GameServer : MonoBehaviour {
     private int version = 1;
     private int subversion = 0;
 
-    private Level level;
-
     private int serverSocket = -1;
-    
+
     // list of connected clients
     private List<int> clients = new List<int>();
     // list of players in game
@@ -26,11 +24,17 @@ public class GameServer : MonoBehaviour {
 
     private DatabaseUtil dbUtil;
 
+    private Level level;
+    private int winner = -1;
+
     class PlayerState {
         public int id;
+        public string name;
         public Vector3 pos;
-        public PlayerState(int id, Vector3 pos = new Vector3()) {
+        public bool alive = true;
+        public PlayerState(int id, string name, Vector3 pos = new Vector3()) {
             this.id = id;
+            this.name = name;
             this.pos = pos;
         }
     }
@@ -40,11 +44,8 @@ public class GameServer : MonoBehaviour {
         Destroy(gameObject.GetComponent<GameClient>());
         DontDestroyOnLoad(gameObject);
 
-        // open up database
+        // start up database
         dbUtil = gameObject.AddComponent<DatabaseUtil>();
-
-        // for testing until we get database working
-        //PlayerPrefs.DeleteAll();
 
         NetworkTransport.Init();
         ConnectionConfig config = new ConnectionConfig();
@@ -63,6 +64,7 @@ public class GameServer : MonoBehaviour {
         if (!success) {
             Debug.Log("SERVER: start broadcast discovery failed!");
             Application.Quit();
+            Destroy(gameObject);
         } else if (NetworkTransport.IsBroadcastDiscoveryRunning()) {
             Debug.Log("SERVER: started and broadcasting");
         } else {
@@ -72,7 +74,7 @@ public class GameServer : MonoBehaviour {
         SceneManager.LoadScene(1);
     }
 
-    Packet MakeTestPacket() {
+    private Packet MakeTestPacket() {
         Packet p = new Packet(PacketType.MESSAGE);
         p.Write("HI ITS ME THE SERVER CONNECT UP");
         p.Write(23.11074f);
@@ -80,18 +82,80 @@ public class GameServer : MonoBehaviour {
         return p;
     }
 
+    private int getNumAlivePlayers() {
+        int numAlive = 0;
+        for (int i = 0; i < players.Count; ++i) {
+            if (players[i].alive) {
+                numAlive++;
+            }
+        }
+        return numAlive;
+    }
+
+    // returns -1 if no winners yet
+    // returns 0 if draw
+    // returns an num > 0 indicating id of player who won
+    private int checkForWinner() {
+        int winner = -1;
+        int numAlive = 0;
+        for (int i = 0; i < players.Count; ++i) {
+            if (players[i].alive) {
+                if (++numAlive > 1) {
+                    return -1;  // game still going
+                }
+                winner = players[i].id;
+            }
+        }
+        if (numAlive == 1) {
+            return winner;          // this player won!
+        } else {
+            return 0;               // no winners! a draw
+        }
+    }
+
     // Update is called once per frame
     void Update() {
         // send out packet to all connected players of positions
         Packet updatePacket = new Packet(PacketType.STATE_UPDATE);
-        updatePacket.Write(players.Count); // first write number of players connected
+
+        updatePacket.Write(getNumAlivePlayers());
         for (int i = 0; i < players.Count; ++i) {   // for each client send their id and position
-            updatePacket.Write(players[i].id);
-            updatePacket.Write(players[i].pos);
+            if (players[i].alive) {
+                updatePacket.Write(players[i].id);
+                updatePacket.Write(players[i].pos);
+            }
         }
         broadcastPacket(updatePacket);
 
         checkMessages();
+    }
+
+    void LateUpdate() {
+        if (winner != -1) {    // if game has ended then restart
+            level.GenerateLevel();
+            // figure out message to say at end
+            string gameOverMessage = "It's a Draw!";
+            if (winner > 0) {
+                string playername = players[playerIndices[winner]].name;
+                gameOverMessage = playername + " wins!";
+            }
+
+            for (int i = 0; i < players.Count; ++i) {
+                Packet p = new Packet(PacketType.RESTART_GAME);
+                p.Write(winner);
+                int[] tiles = level.getTiles();
+                p.Write(tiles.Length);
+                for (int j = 0; j < tiles.Length; j++) {
+                    p.Write((byte)tiles[j]);
+                }
+                p.Write(level.getRandomGroundPosition());
+                p.Write(gameOverMessage);
+
+                sendPacket(p, players[i].id);
+                players[i].alive = true;
+            }
+            winner = -1;
+        }
     }
 
     void OnLevelWasLoaded(int levelNum) {
@@ -109,12 +173,21 @@ public class GameServer : MonoBehaviour {
 
     // broadcasts packet to all connected players in game
     private void broadcastPacket(Packet packet) {
-        for (int i = 0; i < players.Count; i++) {
+        for (int i = 0; i < players.Count; ++i) {
             sendPacket(packet, players[i].id);
         }
     }
 
-    void checkMessages() {
+    private void broadcastToAllButOne(Packet packet, int excludeClientID) {
+        for (int i = 0; i < players.Count; ++i) {
+            if (playerIndices[excludeClientID] == i) {
+                continue;
+            }
+            sendPacket(packet, players[i].id);
+        }
+    }
+
+    private void checkMessages() {
         int recConnectionID;    // rec stands for received
         int recChannelID;
         int bsize = 1024;
@@ -138,15 +211,7 @@ public class GameServer : MonoBehaviour {
                 case NetworkEventType.DisconnectEvent:
                     clients.Remove(recConnectionID);
                     Debug.Log("SERVER: client disconnected: " + recConnectionID);
-
-                    // recalculate indices for all players if needed
-                    if (playerIndices.ContainsKey(recConnectionID)) {
-                        players.RemoveAt(playerIndices[recConnectionID]);
-                        playerIndices.Clear();
-                        for (int i = 0; i < players.Count; ++i) {
-                            playerIndices[players[i].id] = i;
-                        }
-                    }
+                    removeFromPlayers(recConnectionID);
 
                     break;
                 default:
@@ -157,8 +222,9 @@ public class GameServer : MonoBehaviour {
 
     }
 
-    void receivePacket(Packet packet, int clientID) {
+    private void receivePacket(Packet packet, int clientID) {
         PacketType pt = (PacketType)packet.ReadByte();
+        Packet p;   // return packet
         switch (pt) {
             case PacketType.LOGIN:
                 string name = packet.ReadString();
@@ -169,7 +235,7 @@ public class GameServer : MonoBehaviour {
                 bool loginSuccessful = dbUtil.tryLogin(name, password);
 
                 // send login response back to client
-                Packet p = new Packet(PacketType.LOGIN);
+                p = new Packet(PacketType.LOGIN);
                 if (loginSuccessful) {
                     p.Write(clientID);
                     int[] tiles = level.getTiles();
@@ -183,7 +249,7 @@ public class GameServer : MonoBehaviour {
 
                     // add player to game (and start sending them state info)
                     playerIndices[clientID] = players.Count;
-                    players.Add(new PlayerState(clientID, spawn));
+                    players.Add(new PlayerState(clientID, name, spawn));
 
                 } else {
                     p.Write(-1);
@@ -196,9 +262,34 @@ public class GameServer : MonoBehaviour {
                 Debug.Assert(playerIndices.ContainsKey(clientID));
                 players[playerIndices[clientID]].pos = packet.ReadVector3();
                 break;
+
+            case PacketType.SPAWN_BOMB:
+                p = new Packet(PacketType.SPAWN_BOMB);
+                p.Write(packet.ReadVector3());
+                broadcastToAllButOne(p, clientID);
+                break;
+
+            case PacketType.PLAYER_DIED:
+                players[playerIndices[clientID]].alive = false;
+                winner = checkForWinner();
+
+                break;
             default:
                 break;
         }
 
+    }
+
+
+    // remove client from player list if he is on it
+    private void removeFromPlayers(int clientID) {
+        if (playerIndices.ContainsKey(clientID)) {
+            players.RemoveAt(playerIndices[clientID]);
+            // recalculate mapping of ids to indices
+            playerIndices.Clear();
+            for (int i = 0; i < players.Count; ++i) {
+                playerIndices[players[i].id] = i;
+            }
+        }
     }
 }
