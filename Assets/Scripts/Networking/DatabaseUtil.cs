@@ -41,7 +41,8 @@ public class DatabaseUtil : MonoBehaviour {
         reader.Close();
         // if found a password at that name then return whether passwords match
         if (p != "") {
-            if (password == p) {
+            int pHash = int.Parse(p);
+            if (password.GetHashCode() == pHash) {
                 Debug.Log("SERVER: player login accepted");
                 return true;
             } else {
@@ -50,7 +51,8 @@ public class DatabaseUtil : MonoBehaviour {
             }
         }
         // no account under this name so add to database
-        cmd.CommandText = "INSERT INTO Accounts VALUES(\"" + name + "\", \"" + password + "\");";
+        int passwordHash = password.GetHashCode();
+        cmd.CommandText = "INSERT INTO Accounts VALUES(\"" + name + "\", \"" + passwordHash + "\");";
         cmd.ExecuteNonQuery();
         Debug.Log("SERVER: new player \"" + name + "\" joined with password \"" + password + "\"");
         return true;

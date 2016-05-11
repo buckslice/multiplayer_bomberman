@@ -193,7 +193,7 @@ public class GameClient : MonoBehaviour {
             case PacketType.LOGIN:
                 waitingForLoginResponse = false;
                 id = packet.ReadInt();
-                if (id != -1) {
+                if (id >= 0) {
                     playerID = id;
                     Debug.Log("CLIENT: authenticated by server, joining game");
                     statusText.text = "Login successful!";
@@ -209,8 +209,12 @@ public class GameClient : MonoBehaviour {
                     // load into next scene
                     // rest of initialization proceeds in OnLevelWasLoaded() above
                     SceneManager.LoadScene(1);
-                } else {
+                } else if(id == -1){
                     statusText.text = "Invalid login info!";
+                    flashStatusText(Color.red);
+                } else if (id == -2)
+                {
+                    statusText.text = "Already logged in!";
                     flashStatusText(Color.red);
                 }
                 break;

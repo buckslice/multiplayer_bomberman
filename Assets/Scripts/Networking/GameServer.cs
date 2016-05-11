@@ -7,6 +7,7 @@ public class GameServer : MonoBehaviour {
 
     private byte channelReliable;
     private int maxConnections = 4;
+    private List<string> logins = new List<string>();
 
     private int port = 8888;
     private int key = 420;
@@ -209,6 +210,7 @@ public class GameServer : MonoBehaviour {
                     Debug.Log("SERVER: client connected: " + recConnectionID);
                     break;
                 case NetworkEventType.DisconnectEvent:
+                    
                     clients.Remove(recConnectionID);
                     Debug.Log("SERVER: client disconnected: " + recConnectionID);
                     removeFromPlayers(recConnectionID);
@@ -236,7 +238,8 @@ public class GameServer : MonoBehaviour {
 
                 // send login response back to client
                 p = new Packet(PacketType.LOGIN);
-                if (loginSuccessful) {
+                if (loginSuccessful && !logins.Contains(name)) {
+                    logins.Add(name);
                     p.Write(clientID);
                     int[] tiles = level.getTiles();
                     p.Write(tiles.Length);
@@ -251,7 +254,12 @@ public class GameServer : MonoBehaviour {
                     playerIndices[clientID] = players.Count;
                     players.Add(new PlayerState(clientID, name, spawn));
 
-                } else {
+                } else if (logins.Contains(name) && loginSuccessful)
+                {
+                    p.Write(-2);
+                }
+                else
+                {
                     p.Write(-1);
                 }
                 sendPacket(p, clientID);
@@ -284,6 +292,7 @@ public class GameServer : MonoBehaviour {
     // remove client from player list if he is on it
     private void removeFromPlayers(int clientID) {
         if (playerIndices.ContainsKey(clientID)) {
+            logins.Remove(players[playerIndices[clientID]].name);
             players.RemoveAt(playerIndices[clientID]);
             // recalculate mapping of ids to indices
             playerIndices.Clear();
