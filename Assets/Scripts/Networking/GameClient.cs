@@ -143,6 +143,10 @@ public class GameClient : MonoBehaviour {
                     // get broadcast message (not doing anything with it currently)
                     NetworkTransport.GetBroadcastConnectionMessage(clientSocket, buffer, bsize, out dataSize, out error);
 
+                    Packet p = new Packet(buffer);
+                    PacketType type = (PacketType)p.ReadByte(); // reading it just to get it out of the way
+                    string localIP = p.ReadString();
+
                     // connect to broadcaster by port and address
                     int broadcastPort;
                     string broadcastAddress;
@@ -152,7 +156,8 @@ public class GameClient : MonoBehaviour {
                     NetworkTransport.RemoveHost(clientSocket);
                     clientSocket = -1;
                     // reconnect in one second since RemoveHost kind of times out the network momentarily
-                    StartCoroutine(waitThenReconnect(0.5f, broadcastAddress, broadcastPort));
+                    //StartCoroutine(waitThenReconnect(0.5f, broadcastAddress, broadcastPort));
+                    StartCoroutine(waitThenReconnect(0.5f, localIP, broadcastPort));
 
                     return;
 

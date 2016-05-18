@@ -2,6 +2,8 @@
 using UnityEngine.Networking;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
+using System.Net;
+using System.Net.Sockets;
 
 public class GameServer : MonoBehaviour {
 
@@ -76,10 +78,22 @@ public class GameServer : MonoBehaviour {
     }
 
     private Packet MakeTestPacket() {
+        IPHostEntry host;
+        string localIP = "";
+        host = Dns.GetHostEntry(Dns.GetHostName());
+        foreach (IPAddress ip in host.AddressList) {
+            if (ip.AddressFamily == AddressFamily.InterNetwork) {
+                localIP = ip.ToString();
+                Debug.Log(localIP);
+                break;
+            }
+        }
+
         Packet p = new Packet(PacketType.MESSAGE);
-        p.Write("HI ITS ME THE SERVER CONNECT UP");
-        p.Write(23.11074f);
-        p.Write(new Vector3(2.0f, 1.0f, 0.0f));
+        p.Write(localIP);
+        //p.Write("HI ITS ME THE SERVER CONNECT UP");
+        //p.Write(23.11074f);
+        //p.Write(new Vector3(2.0f, 1.0f, 0.0f));
         return p;
     }
 
@@ -210,7 +224,7 @@ public class GameServer : MonoBehaviour {
                     Debug.Log("SERVER: client connected: " + recConnectionID);
                     break;
                 case NetworkEventType.DisconnectEvent:
-                    
+
                     clients.Remove(recConnectionID);
                     Debug.Log("SERVER: client disconnected: " + recConnectionID);
                     removeFromPlayers(recConnectionID);
@@ -254,12 +268,9 @@ public class GameServer : MonoBehaviour {
                     playerIndices[clientID] = players.Count;
                     players.Add(new PlayerState(clientID, name, spawn));
 
-                } else if (logins.Contains(name) && loginSuccessful)
-                {
+                } else if (logins.Contains(name) && loginSuccessful) {
                     p.Write(-2);
-                }
-                else
-                {
+                } else {
                     p.Write(-1);
                 }
                 sendPacket(p, clientID);
