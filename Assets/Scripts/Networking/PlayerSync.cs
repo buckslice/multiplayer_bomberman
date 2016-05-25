@@ -13,6 +13,8 @@ public class PlayerSync : MonoBehaviour {
     private Vector3 lastPos;
     private Vector3 targPos;
 
+    public GameObject mesh;
+
     // if a GameClient reference is not provided this will be considered
     // a remote player instance
     public void init(int playerID, GameClient gc = null) {
@@ -23,6 +25,23 @@ public class PlayerSync : MonoBehaviour {
         lastPos = transform.position;
         targPos = transform.position;
         _playerID = playerID;
+        switch (_playerID)
+        {
+            case 1:
+                mesh.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.red);
+                break;
+            case 2:
+                mesh.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.blue);
+                break;
+            case 3:
+                mesh.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.green);
+                break;
+            case 4:
+                mesh.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.yellow);
+                break;
+        }
+        
+        
         gameClient = gc;
         PlayerController pc = GetComponent<PlayerController>();
         if (gameClient) {
