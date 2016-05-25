@@ -44,7 +44,7 @@ public class Level : MonoBehaviour {
 
         GetComponent<MeshRenderer>().material.mainTexture = atlas;
 
-        Camera.main.transform.position = new Vector3(width / 2.0f, 12.0f, -1.0f) * SIZE;
+        Camera.main.transform.position = new Vector3(width / 2.0f, 17.0f, -1.0f) * SIZE;
         Camera.main.transform.rotation = Quaternion.Euler(60.0f, 0.0f, 0.0f);
         tiles = new int[width * height];
         //GenerateLevel();
