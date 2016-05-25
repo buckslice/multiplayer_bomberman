@@ -171,6 +171,10 @@ public class GameClient : MonoBehaviour {
                     if (SceneManager.GetActiveScene().buildIndex == 0 && nameInputField.IsActive()) {
                         ResetToMenu.Reset();
                     }
+                    else
+                    {
+                        SceneManager.LoadScene(0);
+                    }
 
                     break;
                 default:
