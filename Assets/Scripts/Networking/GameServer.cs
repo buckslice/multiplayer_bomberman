@@ -47,7 +47,7 @@ public class GameServer : MonoBehaviour {
         Application.runInBackground = true; // for debugging purposes
         //Destroy(gameObject.GetComponent<GameClient>());
         DontDestroyOnLoad(gameObject);
-
+        key = gameObject.GetComponent<GameClient>().getKey();
         // start up database
         dbUtil = gameObject.AddComponent<DatabaseUtil>();
 
@@ -75,7 +75,7 @@ public class GameServer : MonoBehaviour {
             Debug.Log("SERVER: started but not broadcasting!");
         }
 
-        SceneManager.LoadScene(1);
+        //SceneManager.LoadScene(1);
     }
 
     private Packet MakeTestPacket() {

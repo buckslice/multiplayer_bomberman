@@ -6,12 +6,14 @@ using System.Collections;
 using System.Collections.Generic;
 
 public class GameClient : MonoBehaviour {
-    public GameObject startServerButton;
+    public GameObject background;
     public GameObject startClientButton;
     public GameObject joinButton;
+    public InputField roomInputField;
     public InputField nameInputField;
     public InputField passwordInputField;
     public Text statusText;
+    public Text roomText;
     public GameObject playerPrefab;
 
     private IEnumerator statusTextAnim;
@@ -20,8 +22,9 @@ public class GameClient : MonoBehaviour {
     private HostTopology topology;
     private int maxConnections = 4;
 
+    private string roomName;
     private int port = 8887;
-    private int key = 420;
+    private int key = 0;
     private int version = 1;
     private int subversion = 0;
 
@@ -36,17 +39,23 @@ public class GameClient : MonoBehaviour {
     private int[] levelLoad;
     private Vector3 spawn;
     private Level level;
-
+    private bool enabledServer = false;
     private bool restartingGame = true;
+    private float start;
 
     void OnEnable() {
         Application.runInBackground = true; // for debugging purposes
         //Destroy(gameObject.GetComponent<GameServer>());
         DontDestroyOnLoad(gameObject);
-
+        roomName = roomInputField.text;
+        if(roomName.Split().Length == 0)
+        {
+            roomName = "DefaultRoom";
+        }
+        key = roomName.GetHashCode();
         // UI stuff
-        Destroy(startServerButton);
-        Destroy(startClientButton);
+        startClientButton.SetActive(false);
+        roomInputField.gameObject.SetActive(false);
         statusText.gameObject.SetActive(true);
 
         statusTextAnim = statusTextAnimRoutine();
@@ -57,7 +66,7 @@ public class GameClient : MonoBehaviour {
         ConnectionConfig config = new ConnectionConfig();
         channelReliable = config.AddChannel(QosType.Reliable);
         topology = new HostTopology(config, maxConnections);
-
+        start = Time.time;
         StartCoroutine(tryConnectRoutine());
 
     }
@@ -118,12 +127,18 @@ public class GameClient : MonoBehaviour {
         byte[] buffer = new byte[bsize];
         int dataSize;
         byte error;
-
+        
         // continuously loop until there are no more messages
         while (true) {
             NetworkEventType recEvent = NetworkTransport.ReceiveFromHost(
                 clientSocket, out recConnectionID, out recChannelID, buffer, bsize, out dataSize, out error);
-
+            //Debug.Log(Time.time);
+            if(Time.time - start > 3 && !enabledServer)
+            {
+                Debug.Log("Enabling Server");
+                gameObject.GetComponent<GameServer>().enabled = true;
+                enabledServer = true;
+            }
             switch (recEvent) {
                 case NetworkEventType.Nothing:
                     return;
@@ -137,7 +152,14 @@ public class GameClient : MonoBehaviour {
                     }
                     StopCoroutine(statusTextAnim);
                     Debug.Log("CLIENT: found server broadcast!");
-                    statusText.text = "Found Server!";
+                    if (!enabledServer)
+                    {
+                        statusText.text = "Found Server!";
+                    }
+                    else
+                    {
+                        statusText.text = "Creating Server!";
+                    }
                     flashStatusText(Color.yellow);
 
                     // get broadcast message (not doing anything with it currently)
@@ -356,6 +378,10 @@ public class GameClient : MonoBehaviour {
         waitingForLoginResponse = true;
     }
 
+    public int getKey()
+    {
+        return key;
+    }
 
 
     // UI ENUMERATORS
