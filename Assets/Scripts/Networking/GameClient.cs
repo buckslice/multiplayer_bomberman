@@ -41,7 +41,7 @@ public class GameClient : MonoBehaviour {
 
     void OnEnable() {
         Application.runInBackground = true; // for debugging purposes
-        Destroy(gameObject.GetComponent<GameServer>());
+        //Destroy(gameObject.GetComponent<GameServer>());
         DontDestroyOnLoad(gameObject);
 
         // UI stuff

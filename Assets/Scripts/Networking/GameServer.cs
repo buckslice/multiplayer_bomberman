@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 
 public class GameServer : MonoBehaviour {
+    public GameObject startGameButton;
 
     private byte channelReliable;
     private int maxConnections = 4;
@@ -44,7 +45,7 @@ public class GameServer : MonoBehaviour {
 
     void OnEnable() {
         Application.runInBackground = true; // for debugging purposes
-        Destroy(gameObject.GetComponent<GameClient>());
+        //Destroy(gameObject.GetComponent<GameClient>());
         DontDestroyOnLoad(gameObject);
 
         // start up database
