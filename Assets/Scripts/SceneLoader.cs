@@ -5,17 +5,17 @@ using UnityEngine.UI;
 
 public class SceneLoader : MonoBehaviour {
 
-    private GameObject panel;
+    private GameObject fadePanel;
     private Image fadeImage;
     private Text text;
     private bool loading = false;
 
     // Use this for initialization
     void Start() {
-        panel = transform.Find("Panel").gameObject;
-        if (panel) {
-            fadeImage = panel.GetComponent<Image>();
-            text = panel.transform.Find("Text").GetComponent<Text>();
+        fadePanel = transform.Find("FadePanel").gameObject;
+        if (fadePanel) {
+            fadeImage = fadePanel.GetComponent<Image>();
+            text = fadePanel.transform.Find("GameText").GetComponent<Text>();
             text.gameObject.SetActive(false);
         }
 
@@ -41,7 +41,7 @@ public class SceneLoader : MonoBehaviour {
     // fades in from whatever color the image is at
     private IEnumerator fade(bool fadein, bool pauseGame, float time) {
         if (!fadein) {
-            panel.SetActive(true);
+            fadePanel.SetActive(true);
         }
         if (pauseGame) {
             Time.timeScale = 0.0f;
@@ -67,7 +67,7 @@ public class SceneLoader : MonoBehaviour {
         // reset fade variables back to defaults
         fadeImage.color = Color.black;
         if (fadein) {
-            panel.SetActive(false);
+            fadePanel.SetActive(false);
         }
         loading = false;
     }

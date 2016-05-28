@@ -6,11 +6,8 @@ using System.Net;
 using System.Net.Sockets;
 
 public class GameServer : MonoBehaviour {
-    public GameObject startGameButton;
-
     private byte channelReliable;
     private int maxConnections = 4;
-    private List<string> logins = new List<string>();
 
     private int port = 8888;
     private int key = 420;
@@ -21,24 +18,37 @@ public class GameServer : MonoBehaviour {
 
     // list of connected clients
     private List<int> clients = new List<int>();
-    // list of players in game
-    private List<PlayerState> players = new List<PlayerState>();
+
+    // list of connected players sorted by rooms (players[0] is lobby room
+    private List<List<PlayerState>> players = new List<List<PlayerState>>();
+    private int numPlayers = 0;
+
     // maps playerID to their index in player list
-    private Dictionary<int, int> playerIndices = new Dictionary<int, int>();
+    private Dictionary<int, PlayerIndex> playerIndices = new Dictionary<int, PlayerIndex>();
 
     private DatabaseUtil dbUtil;
 
     private Level level;
-    private int winner = -1;
+
+    class PlayerIndex {
+        public int room;
+        public int index;
+        public PlayerIndex(int room, int index) {
+            this.room = room;
+            this.index = index;
+        }
+    }
 
     class PlayerState {
         public int id;
         public string name;
+        public Color32 color;
         public Vector3 pos;
         public bool alive = true;
-        public PlayerState(int id, string name, Vector3 pos = new Vector3()) {
+        public PlayerState(int id, string name, Color32 color, Vector3 pos = new Vector3()) {
             this.id = id;
             this.name = name;
+            this.color = color;
             this.pos = pos;
         }
     }
@@ -47,7 +57,6 @@ public class GameServer : MonoBehaviour {
         Application.runInBackground = true; // for debugging purposes
         //Destroy(gameObject.GetComponent<GameClient>());
         DontDestroyOnLoad(gameObject);
-        key = gameObject.GetComponent<GameClient>().getKey();
         // start up database
         dbUtil = gameObject.AddComponent<DatabaseUtil>();
 
@@ -59,7 +68,8 @@ public class GameServer : MonoBehaviour {
         serverSocket = NetworkTransport.AddHost(topology, port);
         Debug.Log("SERVER: socket opened: " + serverSocket);
 
-        Packet p = MakeTestPacket();
+        Packet p = new Packet(PacketType.MESSAGE);
+        p.Write("Hi its the server broadcasting!");
 
         byte error;
         bool success = NetworkTransport.StartBroadcastDiscovery(
@@ -75,110 +85,92 @@ public class GameServer : MonoBehaviour {
             Debug.Log("SERVER: started but not broadcasting!");
         }
 
+        // create lobby room 0
+        players.Add(new List<PlayerState>());
         //SceneManager.LoadScene(1);
-    }
-
-    private Packet MakeTestPacket() {
-        //IPHostEntry host;
-        //string localIP = "";
-        //host = Dns.GetHostEntry(Dns.GetHostName());
-        //foreach (IPAddress ip in host.AddressList) {
-        //    if (ip.AddressFamily == AddressFamily.InterNetwork) {
-        //        localIP = ip.ToString();
-        //        Debug.Log(localIP);
-        //        break;
-        //    }
-        //}
-
-        Packet p = new Packet(PacketType.MESSAGE);
-        //p.Write(localIP);
-        p.Write("HI ITS ME THE SERVER CONNECT UP");
-        p.Write(23.11074f);
-        p.Write(new Vector3(2.0f, 1.0f, 0.0f));
-        return p;
-    }
-
-    private int getNumAlivePlayers() {
-        int numAlive = 0;
-        for (int i = 0; i < players.Count; ++i) {
-            if (players[i].alive) {
-                numAlive++;
-            }
-        }
-        return numAlive;
-    }
-
-    // returns -1 if no winners yet
-    // returns 0 if draw
-    // returns an num > 0 indicating id of player who won
-    private int checkForWinner() {
-        int winner = -1;
-        int numAlive = 0;
-        for (int i = 0; i < players.Count; ++i) {
-            if (players[i].alive) {
-                if (++numAlive > 1) {
-                    return -1;  // game still going
-                }
-                winner = players[i].id;
-            }
-        }
-        if (numAlive == 1) {
-            return winner;          // this player won!
-        } else {
-            return 0;               // no winners! a draw
-        }
     }
 
     // Update is called once per frame
     void Update() {
-        // send out packet to all connected players of positions
-        Packet updatePacket = new Packet(PacketType.STATE_UPDATE);
 
-        updatePacket.Write(getNumAlivePlayers());
-        for (int i = 0; i < players.Count; ++i) {   // for each client send their id and position
-            if (players[i].alive) {
-                updatePacket.Write(players[i].id);
-                updatePacket.Write(players[i].pos);
+        // for each active room send out state updates
+        for (int room = 1; room < players.Count; ++room) {
+            List<PlayerState> playersInRoom = players[room];
+            if (playersInRoom.Count < 2) { // room still filling up
+                continue;
             }
+            Packet updatePacket = new Packet(PacketType.STATE_UPDATE);
+
+            // find number of alive players in this room (also check for winner while your at it)
+            int winner = -1;
+            int numAlive = 0;
+            for (int i = 0; i < playersInRoom.Count; ++i) {
+                if (playersInRoom[i].alive) {
+                    ++numAlive;
+                    winner = playersInRoom[i].id;
+                }
+            }
+            if (numAlive == 0) {
+                // draw
+            } else if (numAlive == 1) {
+                // player 'winner' won
+            }// else game still going
+
+            for (int i = 0; i < playersInRoom.Count; ++i) {
+                if (playersInRoom[i].alive) {
+                    numAlive++;
+                }
+            }
+            updatePacket.Write(numAlive);
+
+            // send positions of ether players in room
+            for (int i = 0; i < playersInRoom.Count; ++i) {
+                if (playersInRoom[i].alive) {
+                    updatePacket.Write(playersInRoom[i].id);
+                    updatePacket.Write(playersInRoom[i].pos);
+                }
+            }
+            // send out packet to all players in room
+            broadcastPacket(updatePacket, room);
+
         }
-        broadcastPacket(updatePacket);
 
         checkMessages();
     }
 
     void LateUpdate() {
-        if (winner != -1) {    // if game has ended then restart
-            level.GenerateLevel();
-            // figure out message to say at end
-            string gameOverMessage = "It's a Draw!";
-            if (winner > 0) {
-                string playername = players[playerIndices[winner]].name;
-                gameOverMessage = playername + " wins!";
-            }
+        //if (winner != -1) {    // if game has ended then restart
+        //    level.GenerateLevel();
+        //    // figure out message to say at end
+        //    string gameOverMessage = "It's a Draw!";
+        //    if (winner > 0) {
+        //        string playername = players[playerIndices[winner]].name;
+        //        gameOverMessage = playername + " wins!";
+        //    }
 
-            for (int i = 0; i < players.Count; ++i) {
-                Packet p = new Packet(PacketType.RESTART_GAME);
-                p.Write(winner);
-                int[] tiles = level.getTiles();
-                p.Write(tiles.Length);
-                for (int j = 0; j < tiles.Length; j++) {
-                    p.Write((byte)tiles[j]);
-                }
-                p.Write(level.getRandomGroundPosition());
-                p.Write(gameOverMessage);
+        //    for (int i = 0; i < players.Count; ++i) {
+        //        Packet p = new Packet(PacketType.RESTART_GAME);
+        //        p.Write(winner);
+        //        int[] tiles = level.getTiles();
+        //        p.Write(tiles.Length);
+        //        for (int j = 0; j < tiles.Length; j++) {
+        //            p.Write((byte)tiles[j]);
+        //        }
+        //        p.Write(level.getRandomGroundPosition());
+        //        p.Write(gameOverMessage);
 
-                sendPacket(p, players[i].id);
-                players[i].alive = true;
-            }
-            winner = -1;
-        }
+        //        sendPacket(p, players[i].id);
+        //        players[i].alive = true;
+        //    }
+        //    winner = -1;
+        //}
     }
 
     void OnLevelWasLoaded(int levelNum) {
         GameObject levelGO = GameObject.Find("Level");
         if (levelGO) {
             level = levelGO.GetComponent<Level>();
-            level.GenerateLevel();
+            //level.GenerateLevel();
         }
     }
 
@@ -187,19 +179,38 @@ public class GameServer : MonoBehaviour {
         NetworkTransport.Send(serverSocket, clientID, channelReliable, p.getData(), p.getSize(), out error);
     }
 
-    // broadcasts packet to all connected players in game
+    // broadcasts packet to all connected players
     private void broadcastPacket(Packet packet) {
-        for (int i = 0; i < players.Count; ++i) {
-            sendPacket(packet, players[i].id);
+        for(int r = 0; r < players.Count; ++r) {
+            for(int i = 0; i < players[r].Count; ++i) {
+                sendPacket(packet, players[r][i].id);
+            }
         }
     }
-
+    // same as above but to certain room only
+    private void broadcastPacket(Packet packet, int room) {
+        for (int i = 0; i < players[room].Count; ++i) {
+            sendPacket(packet, players[room][i].id);
+        }
+    }
+    // broadcasts packet to all connected players except one
     private void broadcastToAllButOne(Packet packet, int excludeClientID) {
-        for (int i = 0; i < players.Count; ++i) {
-            if (playerIndices[excludeClientID] == i) {
+        for (int r = 0; r < players.Count; ++r) {
+            for (int i = 0; i < players[r].Count; ++i) {
+                if (players[r][i].id == excludeClientID) {
+                    continue;
+                }
+                sendPacket(packet, players[r][i].id);
+            }
+        }
+    }
+    // same as above but to certain room only
+    private void broadcastToAllButOne(Packet packet, int excludeClientID, int room) {
+        for (int i = 0; i < players[room].Count; ++i) {
+            if (players[room][i].id == excludeClientID) {
                 continue;
             }
-            sendPacket(packet, players[i].id);
+            sendPacket(packet, players[room][i].id);
         }
     }
 
@@ -225,7 +236,6 @@ public class GameServer : MonoBehaviour {
                     Debug.Log("SERVER: client connected: " + recConnectionID);
                     break;
                 case NetworkEventType.DisconnectEvent:
-
                     clients.Remove(recConnectionID);
                     Debug.Log("SERVER: client disconnected: " + recConnectionID);
                     removeFromPlayers(recConnectionID);
@@ -253,46 +263,62 @@ public class GameServer : MonoBehaviour {
 
                 // send login response back to client
                 p = new Packet(PacketType.LOGIN);
-                if (loginSuccessful && !logins.Contains(name)) {
-                    logins.Add(name);
+                if (loginSuccessful && isNameUnique(name)) {
                     p.Write(clientID);
-                    int[] tiles = level.getTiles();
-                    p.Write(tiles.Length);
-                    for (int i = 0; i < tiles.Length; i++) {
-                        p.Write((byte)tiles[i]);
+                    p.Write(name);
+                    // assign player a random color (use hue shifting so always bright)
+                    Color32 color = Color.HSVToRGB(Random.value, 1.0f, 1.0f);
+                    p.Write(color);
+
+                    // send this new player rest of current players
+                    p.Write(numPlayers);
+                    for (int r = 0; r < players.Count; ++r) {
+                        for (int i = 0; i < players[r].Count; ++i) {
+                            PlayerState player = players[r][i];
+                            p.Write(player.id);
+                            p.Write(player.name);
+                            p.Write(player.color);
+                        }
                     }
-                    // send player their spawn point
-                    Vector3 spawn = level.getRandomGroundPosition();
-                    p.Write(spawn);
 
-                    // add player to game (and start sending them state info)
-                    playerIndices[clientID] = players.Count;
-                    players.Add(new PlayerState(clientID, name, spawn));
+                    // add player to game lobby
+                    playerIndices[clientID] = new PlayerIndex(0, players[0].Count);
+                    players[0].Add(new PlayerState(clientID, name, color));
+                    ++numPlayers;
 
-                } else if (logins.Contains(name) && loginSuccessful) {
-                    p.Write(-2);
+                    // tell rest of players that new player joined
+                    Packet pJoinPacket = new Packet(PacketType.PLAYER_JOIN);
+                    pJoinPacket.Write(clientID);
+                    pJoinPacket.Write(name);
+                    pJoinPacket.Write(color);
+
+                    //broadcastToAllButOne(pJoinPacket, clientID);
+                    if (clientID == 2) {
+                        Debug.Log("hello");
+                        sendPacket(pJoinPacket, 1);
+                    }
+
+                } else if (loginSuccessful) {
+                    p.Write(-2);    // if someone is already logged in with these credentials
                 } else {
-                    p.Write(-1);
+                    p.Write(-1);    // invalid password
                 }
                 sendPacket(p, clientID);
 
                 break;
 
             case PacketType.STATE_UPDATE:
-                Debug.Assert(playerIndices.ContainsKey(clientID));
-                players[playerIndices[clientID]].pos = packet.ReadVector3();
+                getPlayerByID(clientID).pos = packet.ReadVector3();
                 break;
 
             case PacketType.SPAWN_BOMB:
                 p = new Packet(PacketType.SPAWN_BOMB);
                 p.Write(packet.ReadVector3());
-                broadcastToAllButOne(p, clientID);
+                broadcastToAllButOne(p, clientID, getPlayerRoom(clientID));
                 break;
 
             case PacketType.PLAYER_DIED:
-                players[playerIndices[clientID]].alive = false;
-                winner = checkForWinner();
-
+                getPlayerByID(clientID).alive = false;
                 break;
             default:
                 break;
@@ -304,13 +330,46 @@ public class GameServer : MonoBehaviour {
     // remove client from player list if he is on it
     private void removeFromPlayers(int clientID) {
         if (playerIndices.ContainsKey(clientID)) {
-            logins.Remove(players[playerIndices[clientID]].name);
-            players.RemoveAt(playerIndices[clientID]);
+            --numPlayers;
+            PlayerIndex pi = playerIndices[clientID];
+
+            // tell everyone this player left
+            Packet pLeftPacket = new Packet(PacketType.PLAYER_LEFT);
+            pLeftPacket.Write(clientID);
+            broadcastToAllButOne(pLeftPacket, clientID);
+
+            players[pi.room].RemoveAt(pi.index);
             // recalculate mapping of ids to indices
             playerIndices.Clear();
-            for (int i = 0; i < players.Count; ++i) {
-                playerIndices[players[i].id] = i;
+            for (int r = 0; r < players.Count; r++) {
+                for (int i = 0; i < players[r].Count; i++) {
+                    playerIndices[players[r][i].id] = new PlayerIndex(r, i);
+                }
             }
         }
     }
+
+    // return room player is in
+    private int getPlayerRoom(int clientID) {
+        return playerIndices[clientID].room;
+    }
+
+    private PlayerState getPlayerByID(int clientID) {
+        Debug.Assert(playerIndices.ContainsKey(clientID));
+        PlayerIndex pi = playerIndices[clientID];
+        return players[pi.room][pi.index];
+    }
+
+    // check if any currently connected players has this name
+    private bool isNameUnique(string name) {
+        for (int r = 0; r < players.Count; ++r) {
+            for (int i = 0; i < players[r].Count; ++i) {
+                if (players[r][i].name == name) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
 }

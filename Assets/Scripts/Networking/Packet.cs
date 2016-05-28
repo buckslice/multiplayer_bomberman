@@ -11,8 +11,9 @@ public enum PacketType : byte {
     SPAWN_BOMB,
     PLAYER_DIED,
     RESTART_GAME,
-    // more to be added in future
-
+    PLAYER_JOIN,
+    PLAYER_LEFT,
+    GAME_START,
 }
 
 public class Packet {
@@ -94,6 +95,12 @@ public class Packet {
         writer.Write(q.z);
         writer.Write(q.w);
     }
+    public void Write(Color32 c) {
+        writer.Write(c.r);
+        writer.Write(c.g);
+        writer.Write(c.b);
+        writer.Write(c.a);
+    }
 
     public string ReadString() {
         return reader.ReadString();
@@ -122,6 +129,13 @@ public class Packet {
             reader.ReadSingle(),
             reader.ReadSingle(),
             reader.ReadSingle());
+    }
+    public Color32 ReadColor() {
+        return new Color32(
+            reader.ReadByte(),
+            reader.ReadByte(),
+            reader.ReadByte(),
+            reader.ReadByte());
     }
 
     /// <summary>

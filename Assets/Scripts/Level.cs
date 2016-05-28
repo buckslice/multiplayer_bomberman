@@ -58,7 +58,6 @@ public class Level : MonoBehaviour {
     public void GenerateLevel() {
         tiles = new int[width * height];
 
-
         // generate board
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {

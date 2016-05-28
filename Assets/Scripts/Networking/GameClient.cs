@@ -4,17 +4,21 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 
 public class GameClient : MonoBehaviour {
+    public GameObject playerPrefab;
+
+    // menu screen stuff
     public GameObject background;
     public GameObject startClientButton;
     public GameObject joinButton;
-    public InputField roomInputField;
     public InputField nameInputField;
     public InputField passwordInputField;
     public Text statusText;
-    public Text roomText;
-    public GameObject playerPrefab;
+
+    // lobby screen stuff
+    public Text playerNamesText;
 
     private IEnumerator statusTextAnim;
 
@@ -24,38 +28,46 @@ public class GameClient : MonoBehaviour {
 
     private string roomName;
     private int port = 8887;
-    private int key = 0;
+    private int key = 420;
     private int version = 1;
     private int subversion = 0;
 
     private int clientSocket = -1;  // this clients socket ID
     private int serverSocket = -1;  // ID of server this client is connected to    
-    private int playerID = -1;      // ID of player on server
 
     private bool waitingForLoginResponse = false;
 
+    // this client is always at the first entry
+    private List<PlayerState> playersOnServer = new List<PlayerState>();
     private List<PlayerSync> otherPlayers = new List<PlayerSync>();
 
     private int[] levelLoad;
     private Vector3 spawn;
     private Level level;
     private bool enabledServer = false;
-    private bool restartingGame = true;
-    private float start;
+    private float gameStartTime;
+
+    private float updateNamesTimer = 0.0f;
+
+    // internal class different from servers PlayerState
+    class PlayerState {
+        public int id;
+        public string name;
+        public Color32 color;
+        public PlayerState(int id, string name, Color32 color) {
+            this.id = id;
+            this.name = name;
+            this.color = color;
+        }
+    }
 
     void OnEnable() {
         Application.runInBackground = true; // for debugging purposes
         //Destroy(gameObject.GetComponent<GameServer>());
         DontDestroyOnLoad(gameObject);
-        roomName = roomInputField.text;
-        if(roomName.Split().Length == 0)
-        {
-            roomName = "DefaultRoom";
-        }
-        key = roomName.GetHashCode();
+
         // UI stuff
         startClientButton.SetActive(false);
-        roomInputField.gameObject.SetActive(false);
         statusText.gameObject.SetActive(true);
 
         statusTextAnim = statusTextAnimRoutine();
@@ -66,7 +78,7 @@ public class GameClient : MonoBehaviour {
         ConnectionConfig config = new ConnectionConfig();
         channelReliable = config.AddChannel(QosType.Reliable);
         topology = new HostTopology(config, maxConnections);
-        start = Time.time;
+        gameStartTime = Time.realtimeSinceStartup;
         StartCoroutine(tryConnectRoutine());
 
     }
@@ -87,33 +99,57 @@ public class GameClient : MonoBehaviour {
             if (Input.GetKeyDown(KeyCode.Return)) {
                 tryJoiningGame();
             }
+
+            // if havnt connected to a server and waited three seconds
+            if (!enabledServer && serverSocket < 0 && Time.realtimeSinceStartup - gameStartTime > 2.0f) {
+                Debug.Log("Enabling Server");
+                gameObject.GetComponent<GameServer>().enabled = true;
+                enabledServer = true;
+            }
+        } else {
+            updateNamesTimer -= Time.deltaTime;
+            if (updateNamesTimer < 0.0f) {
+                updateNamesTimer = 0.5f;
+                StringBuilder sb = new StringBuilder();
+                for(int i = 0; i < playersOnServer.Count; ++i) {
+                    PlayerState ps = playersOnServer[i];
+                    sb.Append("<color=#");
+                    sb.Append(ps.color.r.ToString("X2"));
+                    sb.Append(ps.color.g.ToString("X2"));
+                    sb.Append(ps.color.b.ToString("X2"));
+                    sb.Append(">");
+                    sb.Append(ps.name);
+                    sb.Append("</color>\n");
+                }
+
+                playerNamesText.text = sb.ToString();
+            }
         }
 
         checkMessages();
     }
 
     void OnLevelWasLoaded(int levelNum) {
-        GameObject levelGO = GameObject.Find("Level");
-        if (levelGO && levelNum == 1) {
-            level = levelGO.GetComponent<Level>();
-
-            for (int i = 0; i < levelLoad.Length; ++i) {
-                level.setTile(i, levelLoad[i]);
-            }
-            level.BuildMesh();
-
-            // spawn player for this client
-            GameObject pgo = (GameObject)Instantiate(playerPrefab, spawn, Quaternion.identity);
-            pgo.GetComponent<PlayerSync>().init(playerID, this);
-
-            // delay starting the game a little so the client can get rid of old state packets from server
-            StartCoroutine(setFullyLoaded(0.3f));
+        if(levelNum == 1) {
+            playerNamesText = GameObject.Find("ConnectedPlayerNames").GetComponent<Text>();
         }
-    }
 
-    IEnumerator setFullyLoaded(float t) {
-        yield return new WaitForSeconds(t);
-        restartingGame = false;
+        //GameObject levelGO = GameObject.Find("Level");
+        //if (levelGO && levelNum == 1) {
+        //    level = levelGO.GetComponent<Level>();
+
+        //    for (int i = 0; i < levelLoad.Length; ++i) {
+        //        level.setTile(i, levelLoad[i]);
+        //    }
+        //    level.BuildMesh();
+
+        //    // spawn player for this client
+        //    GameObject pgo = (GameObject)Instantiate(playerPrefab, spawn, Quaternion.identity);
+        //    pgo.GetComponent<PlayerSync>().init(playerID, this);
+
+        //    // delay starting the game a little so the client can get rid of old state packets from server
+        //    StartCoroutine(setFullyLoaded(0.3f));
+        //}
     }
 
     public void checkMessages() {
@@ -127,18 +163,11 @@ public class GameClient : MonoBehaviour {
         byte[] buffer = new byte[bsize];
         int dataSize;
         byte error;
-        
+
         // continuously loop until there are no more messages
         while (true) {
             NetworkEventType recEvent = NetworkTransport.ReceiveFromHost(
                 clientSocket, out recConnectionID, out recChannelID, buffer, bsize, out dataSize, out error);
-            //Debug.Log(Time.time);
-            if(Time.time - start > 3 && !enabledServer)
-            {
-                Debug.Log("Enabling Server");
-                gameObject.GetComponent<GameServer>().enabled = true;
-                enabledServer = true;
-            }
             switch (recEvent) {
                 case NetworkEventType.Nothing:
                     return;
@@ -152,22 +181,11 @@ public class GameClient : MonoBehaviour {
                     }
                     StopCoroutine(statusTextAnim);
                     Debug.Log("CLIENT: found server broadcast!");
-                    if (!enabledServer)
-                    {
-                        statusText.text = "Found Server!";
-                    }
-                    else
-                    {
-                        statusText.text = "Creating Server!";
-                    }
+                    statusText.text = !enabledServer ? "Found Server!" : "Created Server!";
                     flashStatusText(Color.yellow);
 
                     // get broadcast message (not doing anything with it currently)
                     NetworkTransport.GetBroadcastConnectionMessage(clientSocket, buffer, bsize, out dataSize, out error);
-
-                    Packet p = new Packet(buffer);
-                    PacketType type = (PacketType)p.ReadByte(); // reading it just to get it out of the way
-                    string localIP = p.ReadString();
 
                     // connect to broadcaster by port and address
                     int broadcastPort;
@@ -178,12 +196,9 @@ public class GameClient : MonoBehaviour {
                     NetworkTransport.RemoveHost(clientSocket);
                     clientSocket = -1;
                     // reconnect in one second since RemoveHost kind of times out the network momentarily
-                    //StartCoroutine(waitThenReconnect(0.5f, broadcastAddress, broadcastPort));
-                    StartCoroutine(waitThenReconnect(0.5f, localIP, broadcastPort));
+                    StartCoroutine(waitThenReconnect(0.5f, broadcastAddress, broadcastPort));
 
                     return;
-
-                //break;
                 case NetworkEventType.ConnectEvent:
                     Debug.Log("CLIENT: connected to server");
                     break;
@@ -192,9 +207,7 @@ public class GameClient : MonoBehaviour {
                     // if was at login screen then reset
                     if (SceneManager.GetActiveScene().buildIndex == 0 && nameInputField.IsActive()) {
                         ResetToMenu.Reset();
-                    }
-                    else
-                    {
+                    } else {
                         SceneManager.LoadScene(0);
                     }
 
@@ -213,11 +226,6 @@ public class GameClient : MonoBehaviour {
 
     public void receivePacket(Packet packet) {
         PacketType pt = (PacketType)packet.ReadByte();
-        // make sure you dont process state updates if game is not yet fully loaded
-        // once you login successfully server starts sending you game states
-        if (restartingGame && pt != PacketType.LOGIN) {
-            return;
-        }
 
         int id;
         switch (pt) {
@@ -225,26 +233,31 @@ public class GameClient : MonoBehaviour {
                 waitingForLoginResponse = false;
                 id = packet.ReadInt();
                 if (id >= 0) {
-                    playerID = id;
+                    string name = packet.ReadString();
+                    Color32 color = packet.ReadColor();
+                    playersOnServer.Clear();
+                    playersOnServer.Add(new PlayerState(id, name, color));
+
+                    int numPlayers = packet.ReadInt();
+                    for (int i = 0; i < numPlayers; ++i) {
+                        int pid = packet.ReadInt();
+                        string pname = packet.ReadString();
+                        Color32 pcolor = packet.ReadColor();
+                        playersOnServer.Add(new PlayerState(pid, pname, pcolor));
+                    }
+
                     Debug.Log("CLIENT: authenticated by server, joining game");
                     statusText.text = "Login successful!";
                     statusText.color = Color.yellow;
 
-                    levelLoad = new int[packet.ReadInt()];
-                    for (int i = 0; i < levelLoad.Length; ++i) {
-                        levelLoad[i] = packet.ReadByte();
-                    }
-                    // spawn player for this client
-                    spawn = packet.ReadVector3();
-
                     // load into next scene
-                    // rest of initialization proceeds in OnLevelWasLoaded() above
                     SceneManager.LoadScene(1);
-                } else if(id == -1){
+                } else if (id == -1) {
+                    Debug.Log("CLIENT: invalid login");
                     statusText.text = "Invalid login info!";
                     flashStatusText(Color.red);
-                } else if (id == -2)
-                {
+                } else if (id == -2) {
+                    Debug.Log("CLIENT: already loggged in");
                     statusText.text = "Already logged in!";
                     flashStatusText(Color.red);
                 }
@@ -256,7 +269,7 @@ public class GameClient : MonoBehaviour {
                 for (int i = 0, index = 0; index < numAlivePlayers; ++index) {
                     id = packet.ReadInt();
                     Vector3 pos = packet.ReadVector3();
-                    if (playerID == id) {
+                    if (playersOnServer[0].id == id) {
                         myPlayerAlive = true;
                         continue; // ignore own position given from server for now
                     }
@@ -294,12 +307,11 @@ public class GameClient : MonoBehaviour {
                 break;
 
             case PacketType.RESTART_GAME:
-                restartingGame = true;
                 int winner = packet.ReadInt();
 
                 // clear otherplayers list
-                for(int i = 0; i < otherPlayers.Count; ++i) {
-                    if(otherPlayers[i].playerID != winner) {
+                for (int i = 0; i < otherPlayers.Count; ++i) {
+                    if (otherPlayers[i].playerID != winner) {
                         Destroy(otherPlayers[i].gameObject);
                     }
                 }
@@ -315,6 +327,21 @@ public class GameClient : MonoBehaviour {
                 string message = packet.ReadString();
                 FindObjectOfType<SceneLoader>().fadeOutWithText(message);
 
+                break;
+            case PacketType.PLAYER_JOIN:
+                int pjid = packet.ReadInt();
+                string pjname = packet.ReadString();
+                Color32 pjcolor = packet.ReadColor();
+                playersOnServer.Add(new PlayerState(pjid, pjname, pjcolor));
+                break;
+            case PacketType.PLAYER_LEFT:
+                int plid = packet.ReadInt();
+                for(int i = 0; i < playersOnServer.Count; ++i) {
+                    if(playersOnServer[i].id == plid) {
+                        playersOnServer.RemoveAt(i);
+                        break;
+                    }
+                }
                 break;
             default:
                 break;
@@ -355,6 +382,11 @@ public class GameClient : MonoBehaviour {
         nameInputField.gameObject.SetActive(true);
         passwordInputField.gameObject.SetActive(true);
         joinButton.SetActive(true);
+
+        // can delete server script now if not used
+        if (!enabledServer) {
+            Destroy(gameObject.GetComponent<GameServer>());
+        }
     }
 
     // tries to join game with current input field credentials
@@ -377,12 +409,6 @@ public class GameClient : MonoBehaviour {
 
         waitingForLoginResponse = true;
     }
-
-    public int getKey()
-    {
-        return key;
-    }
-
 
     // UI ENUMERATORS
     IEnumerator flashStatusTextHandle;
