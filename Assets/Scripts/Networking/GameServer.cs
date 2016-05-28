@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 
 public class GameServer : MonoBehaviour {
+    public GameObject startGameButton;
 
     private byte channelReliable;
     private int maxConnections = 4;
@@ -44,9 +45,9 @@ public class GameServer : MonoBehaviour {
 
     void OnEnable() {
         Application.runInBackground = true; // for debugging purposes
-        Destroy(gameObject.GetComponent<GameClient>());
+        //Destroy(gameObject.GetComponent<GameClient>());
         DontDestroyOnLoad(gameObject);
-
+        key = gameObject.GetComponent<GameClient>().getKey();
         // start up database
         dbUtil = gameObject.AddComponent<DatabaseUtil>();
 
@@ -74,7 +75,7 @@ public class GameServer : MonoBehaviour {
             Debug.Log("SERVER: started but not broadcasting!");
         }
 
-        SceneManager.LoadScene(1);
+        //SceneManager.LoadScene(1);
     }
 
     private Packet MakeTestPacket() {
