@@ -78,22 +78,22 @@ public class GameServer : MonoBehaviour {
     }
 
     private Packet MakeTestPacket() {
-        IPHostEntry host;
-        string localIP = "";
-        host = Dns.GetHostEntry(Dns.GetHostName());
-        foreach (IPAddress ip in host.AddressList) {
-            if (ip.AddressFamily == AddressFamily.InterNetwork) {
-                localIP = ip.ToString();
-                Debug.Log(localIP);
-                break;
-            }
-        }
+        //IPHostEntry host;
+        //string localIP = "";
+        //host = Dns.GetHostEntry(Dns.GetHostName());
+        //foreach (IPAddress ip in host.AddressList) {
+        //    if (ip.AddressFamily == AddressFamily.InterNetwork) {
+        //        localIP = ip.ToString();
+        //        Debug.Log(localIP);
+        //        break;
+        //    }
+        //}
 
         Packet p = new Packet(PacketType.MESSAGE);
-        p.Write(localIP);
-        //p.Write("HI ITS ME THE SERVER CONNECT UP");
-        //p.Write(23.11074f);
-        //p.Write(new Vector3(2.0f, 1.0f, 0.0f));
+        //p.Write(localIP);
+        p.Write("HI ITS ME THE SERVER CONNECT UP");
+        p.Write(23.11074f);
+        p.Write(new Vector3(2.0f, 1.0f, 0.0f));
         return p;
     }
 
