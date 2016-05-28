@@ -45,7 +45,7 @@ public class GameClient : MonoBehaviour {
     private Vector3 spawn;
     private Level level;
     private bool enabledServer = false;
-    private float gameStartTime;
+    private float timeUntilStartServer = 2.0f;
 
     private float updateNamesTimer = 0.0f;
 
@@ -78,7 +78,6 @@ public class GameClient : MonoBehaviour {
         ConnectionConfig config = new ConnectionConfig();
         channelReliable = config.AddChannel(QosType.Reliable);
         topology = new HostTopology(config, maxConnections);
-        gameStartTime = Time.realtimeSinceStartup;
         StartCoroutine(tryConnectRoutine());
 
     }
@@ -100,8 +99,9 @@ public class GameClient : MonoBehaviour {
                 tryJoiningGame();
             }
 
-            // if havnt connected to a server and waited three seconds
-            if (!enabledServer && serverSocket < 0 && Time.realtimeSinceStartup - gameStartTime > 2.0f) {
+            // if havnt connected to a server and waited then start one
+            timeUntilStartServer -= Time.deltaTime;
+            if (!enabledServer && serverSocket < 0 && timeUntilStartServer < 0.0f) {
                 Debug.Log("Enabling Server");
                 gameObject.GetComponent<GameServer>().enabled = true;
                 enabledServer = true;
@@ -204,13 +204,7 @@ public class GameClient : MonoBehaviour {
                     break;
                 case NetworkEventType.DisconnectEvent:
                     Debug.Log("CLIENT: disconnected from server");
-                    // if was at login screen then reset
-                    if (SceneManager.GetActiveScene().buildIndex == 0 && nameInputField.IsActive()) {
-                        ResetToMenu.Reset();
-                    } else {
-                        SceneManager.LoadScene(0);
-                    }
-
+                    ResetToMenu.Reset();
                     break;
                 default:
                     break;
@@ -352,6 +346,7 @@ public class GameClient : MonoBehaviour {
         while (clientSocket < 0) {
             clientSocket = NetworkTransport.AddHost(topology, port);
             if (clientSocket < 0) {
+                timeUntilStartServer = 2.0f;
                 Debug.Log("CLIENT: port blocked: " + port);
                 yield return new WaitForSeconds(1.0f);
             }
@@ -362,6 +357,7 @@ public class GameClient : MonoBehaviour {
     }
 
     IEnumerator waitThenReconnect(float waitTime, string remoteAddress, int remotePort) {
+        timeUntilStartServer = 100.0f;
         yield return new WaitForSeconds(waitTime);
 
         while (clientSocket < 0 && port > 8870) { // limit to 16 players max

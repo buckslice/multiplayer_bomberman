@@ -1,9 +1,6 @@
 ﻿using UnityEngine;
 using UnityEngine.Networking;
 using System.Collections.Generic;
-using UnityEngine.SceneManagement;
-using System.Net;
-using System.Net.Sockets;
 
 public class GameServer : MonoBehaviour {
     private byte channelReliable;
@@ -77,8 +74,8 @@ public class GameServer : MonoBehaviour {
 
         if (!success) {
             Debug.Log("SERVER: start broadcast discovery failed!");
-            Application.Quit();
-            Destroy(gameObject);
+            //Application.Quit();
+            Destroy(this);
         } else if (NetworkTransport.IsBroadcastDiscoveryRunning()) {
             Debug.Log("SERVER: started and broadcasting");
         } else {
@@ -292,11 +289,7 @@ public class GameServer : MonoBehaviour {
                     pJoinPacket.Write(name);
                     pJoinPacket.Write(color);
 
-                    //broadcastToAllButOne(pJoinPacket, clientID);
-                    if (clientID == 2) {
-                        Debug.Log("hello");
-                        sendPacket(pJoinPacket, 1);
-                    }
+                    broadcastToAllButOne(pJoinPacket, clientID);
 
                 } else if (loginSuccessful) {
                     p.Write(-2);    // if someone is already logged in with these credentials

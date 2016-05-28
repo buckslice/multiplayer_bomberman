@@ -20,7 +20,6 @@ public class ResetToMenu : MonoBehaviour {
         }
 
         // resets game and networking back to menu state
-        // static method so other classes can call it from wherever
         if (reset) {
             NetworkTransport.Shutdown();
             GameObject netGO = GameObject.Find("Networking");
