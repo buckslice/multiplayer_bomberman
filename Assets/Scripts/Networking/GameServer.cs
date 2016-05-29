@@ -18,6 +18,7 @@ public class GameServer : MonoBehaviour {
 
     // list of connected players sorted by rooms (players[0] is lobby room
     private List<List<PlayerState>> players = new List<List<PlayerState>>();
+    private List<string> roomNames = new List<string>();
     private int numPlayers = 0;
 
     // maps playerID to their index in player list
@@ -59,7 +60,7 @@ public class GameServer : MonoBehaviour {
 
         NetworkTransport.Init();
         ConnectionConfig config = new ConnectionConfig();
-        channelReliable = config.AddChannel(QosType.Reliable);
+        channelReliable = config.AddChannel(QosType.ReliableSequenced);
         HostTopology topology = new HostTopology(config, maxConnections);
 
         serverSocket = NetworkTransport.AddHost(topology, port);
@@ -84,6 +85,7 @@ public class GameServer : MonoBehaviour {
 
         // create lobby room 0
         players.Add(new List<PlayerState>());
+        roomNames.Add("Lobby");
         //SceneManager.LoadScene(1);
     }
 
@@ -178,8 +180,8 @@ public class GameServer : MonoBehaviour {
 
     // broadcasts packet to all connected players
     private void broadcastPacket(Packet packet) {
-        for(int r = 0; r < players.Count; ++r) {
-            for(int i = 0; i < players[r].Count; ++i) {
+        for (int r = 0; r < players.Count; ++r) {
+            for (int i = 0; i < players[r].Count; ++i) {
                 sendPacket(packet, players[r][i].id);
             }
         }
@@ -266,38 +268,24 @@ public class GameServer : MonoBehaviour {
                     // assign player a random color (use hue shifting so always bright)
                     Color32 color = Color.HSVToRGB(Random.value, 1.0f, 1.0f);
                     p.Write(color);
+                    sendPacket(p, clientID);
 
-                    // send this new player rest of current players
-                    p.Write(numPlayers);
-                    for (int r = 0; r < players.Count; ++r) {
-                        for (int i = 0; i < players[r].Count; ++i) {
-                            PlayerState player = players[r][i];
-                            p.Write(player.id);
-                            p.Write(player.name);
-                            p.Write(player.color);
-                        }
-                    }
+                    // tell everyone that a new player joined the server
+                    Packet npPacket = new Packet(PacketType.PLAYER_JOINED_SERVER);
+                    npPacket.Write(name);
+                    npPacket.Write(color);
+                    broadcastPacket(npPacket);
 
-                    // add player to game lobby
-                    playerIndices[clientID] = new PlayerIndex(0, players[0].Count);
-                    players[0].Add(new PlayerState(clientID, name, color));
-                    ++numPlayers;
+                    movePlayerToRoom(new PlayerState(clientID, name, color), 0);
 
-                    // tell rest of players that new player joined
-                    Packet pJoinPacket = new Packet(PacketType.PLAYER_JOIN);
-                    pJoinPacket.Write(clientID);
-                    pJoinPacket.Write(name);
-                    pJoinPacket.Write(color);
-
-                    broadcastToAllButOne(pJoinPacket, clientID);
-
-                } else if (loginSuccessful) {
-                    p.Write(-2);    // if someone is already logged in with these credentials
                 } else {
-                    p.Write(-1);    // invalid password
+                    if (loginSuccessful) {
+                        p.Write(-2);    // if someone is already logged in with these credentials
+                    } else {
+                        p.Write(-1);    // invalid password
+                    }
+                    sendPacket(p, clientID);
                 }
-                sendPacket(p, clientID);
-
                 break;
 
             case PacketType.STATE_UPDATE:
@@ -320,31 +308,99 @@ public class GameServer : MonoBehaviour {
                 p.Write(packet.ReadString());
                 broadcastToAllButOne(p, clientID, 0);   // only to lobby
                 break;
+            case PacketType.CREATE_ROOM:
+                string roomName = packet.ReadString();
+                if (roomNames.Contains(roomName) || roomName == "") { // fail
+                    p = new Packet(PacketType.CREATE_ROOM);
+                    sendPacket(p, clientID);
+                } else {
+                    // create room
+                    roomName = "<color=#ff0000>Room</color> " + roomName;
+                    roomNames.Add(roomName);
+                    players.Add(new List<PlayerState>());
+
+                    movePlayerToRoom(getPlayerByID(clientID), players.Count - 1);
+
+                    // TODO broadcast to rest of players that new room is available
+                }
+
+                break;
+
             default:
                 break;
         }
 
     }
 
+    // player will be moved into this room and sent a list of all other players in the room
+    // all players in new room will be notified that this player joined
+    private void movePlayerToRoom(PlayerState player, int roomIndex) {
+        Debug.Assert(roomIndex >= 0 && roomIndex < players.Count);
+
+        // remove player from list and recalculate indices
+        if (playerIndices.ContainsKey(player.id)) { // checks incase the player is new to the server
+            PlayerIndex pi = playerIndices[player.id];
+
+            // tell players in current room that a player is leaving
+            Packet bpPacket = new Packet(PacketType.PLAYER_LEFT_ROOM);
+            bpPacket.Write(player.id);
+            broadcastToAllButOne(bpPacket, player.id, pi.room);
+
+            players[pi.room].RemoveAt(pi.index);
+            recalculateIndices();
+        }
+
+        // give new player a list of other players in room
+        Packet npPacket = new Packet(PacketType.YOU_JOINED_ROOM);
+        npPacket.Write(roomNames[roomIndex]);    // send them the room name
+        npPacket.Write(players[roomIndex].Count);  // number of players in room
+        for (int i = 0; i < players[roomIndex].Count; ++i) {
+            PlayerState ps = players[roomIndex][i];
+            npPacket.Write(ps.id);
+            npPacket.Write(ps.name);
+            npPacket.Write(ps.color);
+        }
+        sendPacket(npPacket, player.id);
+
+        players[roomIndex].Add(player);
+        playerIndices[player.id] = new PlayerIndex(roomIndex, players[roomIndex].Count - 1);
+
+        // tell other players in room that new player joined
+        Packet opPacket = new Packet(PacketType.PLAYER_JOINED_ROOM);
+        opPacket.Write(player.id);
+        opPacket.Write(player.name);
+        opPacket.Write(player.color);
+
+        broadcastToAllButOne(opPacket, player.id, roomIndex);
+
+    }
 
     // remove client from player list if he is on it
     private void removeFromPlayers(int clientID) {
         if (playerIndices.ContainsKey(clientID)) {
             --numPlayers;
+
+            // tell everyone that a player left the server
+            PlayerState ps = getPlayerByID(clientID);
+            Packet npPacket = new Packet(PacketType.PLAYER_LEFT_SERVER);
+            npPacket.Write(ps.name);
+            npPacket.Write(ps.color);
+            broadcastToAllButOne(npPacket, clientID);
+
             PlayerIndex pi = playerIndices[clientID];
-
-            // tell everyone this player left
-            Packet pLeftPacket = new Packet(PacketType.PLAYER_LEFT);
-            pLeftPacket.Write(clientID);
-            broadcastToAllButOne(pLeftPacket, clientID);
-
             players[pi.room].RemoveAt(pi.index);
-            // recalculate mapping of ids to indices
-            playerIndices.Clear();
-            for (int r = 0; r < players.Count; r++) {
-                for (int i = 0; i < players[r].Count; i++) {
-                    playerIndices[players[r][i].id] = new PlayerIndex(r, i);
-                }
+
+            recalculateIndices();
+        }
+    }
+
+    // recalculates mapping of ids to indices
+    // should be done whenever a player moves between rooms or disconnects
+    private void recalculateIndices() {
+        playerIndices.Clear();
+        for (int r = 0; r < players.Count; r++) {
+            for (int i = 0; i < players[r].Count; i++) {
+                playerIndices[players[r][i].id] = new PlayerIndex(r, i);
             }
         }
     }

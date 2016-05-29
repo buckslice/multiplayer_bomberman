@@ -20,12 +20,11 @@ public class PlayerInfo {
 
 public class GameClient : MonoBehaviour {
     public GameObject playerPrefab;
-    
+
     private byte channelReliable;
     private HostTopology topology;
     private int maxConnections = 4;
 
-    private string roomName;
     private int port = 8887;
     private int key = 420;
     private int version = 1;
@@ -35,10 +34,12 @@ public class GameClient : MonoBehaviour {
     private int serverSocket = -1;  // ID of server this client is connected to    
 
     private bool waitingForLoginResponse = false;
+    private bool waitingForRoomCreateResponse = false;
 
     // this client is always at the first entry
-    private List<PlayerInfo> playersOnServer = new List<PlayerInfo>();
-    private List<PlayerSync> otherPlayers = new List<PlayerSync>();
+    private List<PlayerInfo> playersInMyRoom = new List<PlayerInfo>();
+    private List<PlayerSync> playersInGame = new List<PlayerSync>();
+    private string roomName;
 
     private int[] levelLoad;
     private Vector3 spawn;
@@ -48,29 +49,34 @@ public class GameClient : MonoBehaviour {
 
     private bool inLobby = true;
 
-    private MenuUIController muc;
-    private LobbyUIController luc;
+    private MenuUIController menuUI;
+    private LobbyUIController lobbyUI;
+    // chat scroll view seems to take a frame or two to get settled (also other reasons)
+    // message processing is paused once logged in and for a couple frames
+    // after because the scene transition was causing problems
+    private int loadFrames = 0;
+    private bool dontCheckMessages = false;
 
     void OnEnable() {
         Application.runInBackground = true; // for debugging purposes
         DontDestroyOnLoad(gameObject);
 
-        muc = FindObjectOfType<MenuUIController>();
-        muc.setupStartingUI(this);
+        menuUI = FindObjectOfType<MenuUIController>();
+        menuUI.setupStartingUI(this);
 
         // network init
         NetworkTransport.Init();
         ConnectionConfig config = new ConnectionConfig();
-        channelReliable = config.AddChannel(QosType.Reliable);
+        channelReliable = config.AddChannel(QosType.ReliableSequenced);
         topology = new HostTopology(config, maxConnections);
         StartCoroutine(tryConnectRoutine());
 
     }
 
     void OnLevelWasLoaded(int levelNum) {
-        if(levelNum == 1) {
-            luc = FindObjectOfType<LobbyUIController>();
-            luc.client = this;
+        if (levelNum == 1) {
+            lobbyUI = FindObjectOfType<LobbyUIController>();
+            lobbyUI.client = this;
         }
 
         //GameObject levelGO = GameObject.Find("Level");
@@ -102,7 +108,11 @@ public class GameClient : MonoBehaviour {
                 enabledServer = true;
             }
         } else {    // scene 1
-
+            if (dontCheckMessages && ++loadFrames > 2) {
+                dontCheckMessages = false;
+                PlayerInfo pi = getMyPlayer();
+                lobbyUI.logConnectionMessage(pi.name, pi.color, true, true);
+            }
         }
 
         checkMessages();
@@ -122,6 +132,9 @@ public class GameClient : MonoBehaviour {
 
         // continuously loop until there are no more messages
         while (true) {
+            if (dontCheckMessages) {
+                return;
+            }
             NetworkEventType recEvent = NetworkTransport.ReceiveFromHost(
                 clientSocket, out recConnectionID, out recChannelID, buffer, bsize, out dataSize, out error);
             switch (recEvent) {
@@ -135,10 +148,10 @@ public class GameClient : MonoBehaviour {
                     if (serverSocket >= 0) { // already connected to a server
                         break;
                     }
-                    muc.stopStatusTextAnim();
+                    menuUI.stopStatusTextAnim();
                     Debug.Log("CLIENT: found server broadcast!");
                     string statusText = !enabledServer ? "Found Server!" : "Created Server!";
-                    muc.setStatusText(statusText, Color.yellow, true);
+                    menuUI.setStatusText(statusText, Color.yellow, true);
 
                     // get broadcast message (not doing anything with it currently)
                     NetworkTransport.GetBroadcastConnectionMessage(clientSocket, buffer, bsize, out dataSize, out error);
@@ -177,7 +190,7 @@ public class GameClient : MonoBehaviour {
     private void receivePacket(Packet packet) {
         PacketType pt = (PacketType)packet.ReadByte();
 
-        int id;
+        int id, len;
         switch (pt) {
             case PacketType.LOGIN:
                 waitingForLoginResponse = false;
@@ -185,26 +198,21 @@ public class GameClient : MonoBehaviour {
                 if (id >= 0) {
                     string name = packet.ReadString();
                     Color32 color = packet.ReadColor();
-                    playersOnServer.Clear();
-                    playersOnServer.Add(new PlayerInfo(id, name, color));
+                    playersInMyRoom.Clear();
+                    playersInMyRoom.Add(new PlayerInfo(id, name, color));
 
-                    int numPlayers = packet.ReadInt();
-                    for (int i = 0; i < numPlayers; ++i) {
-                        int pid = packet.ReadInt();
-                        string pname = packet.ReadString();
-                        Color32 pcolor = packet.ReadColor();
-                        playersOnServer.Add(new PlayerInfo(pid, pname, pcolor));
-                    }
-                    Debug.Log("CLIENT: authenticated by server, joining game");
-                    muc.setStatusText("Login successful!", Color.yellow, false);
+                    Debug.Log("CLIENT: authenticated by server, joining lobby");
+                    menuUI.setStatusText("Login successful!", Color.yellow, false);
+
                     // load into next scene
                     SceneManager.LoadScene(1);
+                    dontCheckMessages = true;   // pause checking packets until in new scene
                 } else if (id == -1) {
                     Debug.Log("CLIENT: invalid login");
-                    muc.setStatusText("Invalid login info!", Color.red, true);
+                    menuUI.setStatusText("Invalid login info!", Color.red, true);
                 } else if (id == -2) {
                     Debug.Log("CLIENT: already loggged in");
-                    muc.setStatusText("Alread logged in!", Color.red, true);
+                    menuUI.setStatusText("Alread logged in!", Color.red, true);
                 }
                 break;
 
@@ -214,24 +222,24 @@ public class GameClient : MonoBehaviour {
                 for (int i = 0, index = 0; index < numAlivePlayers; ++index) {
                     id = packet.ReadInt();
                     Vector3 pos = packet.ReadVector3();
-                    if (playersOnServer[0].id == id) {
+                    if (playersInMyRoom[0].id == id) {
                         myPlayerAlive = true;
                         continue; // ignore own position given from server for now
                     }
 
                     // if player id mismatch then delete because he got disconnected
-                    while (i < otherPlayers.Count && otherPlayers[i].playerID != id) {
-                        Destroy(otherPlayers[i].gameObject);
-                        otherPlayers.RemoveAt(i);
+                    while (i < playersInGame.Count && playersInGame[i].playerID != id) {
+                        Destroy(playersInGame[i].gameObject);
+                        playersInGame.RemoveAt(i);
                     }
                     // if new index is at end of list then add new player to end
-                    if (i == otherPlayers.Count) {
+                    if (i == playersInGame.Count) {
                         GameObject pgo = (GameObject)Instantiate(playerPrefab, pos, Quaternion.identity);
                         PlayerSync newPlayer = pgo.GetComponent<PlayerSync>();
                         newPlayer.init(id);
-                        otherPlayers.Add(newPlayer);
+                        playersInGame.Add(newPlayer);
                     } else {  // otherwise sync positions of other players
-                        otherPlayers[i].updatePosition(pos);
+                        playersInGame[i].updatePosition(pos);
                     }
 
                     i++;    // increment index into otherPlayers list
@@ -240,9 +248,9 @@ public class GameClient : MonoBehaviour {
                     numAlivePlayers -= 1;
                 }
                 // make sure to remove old players off end of list
-                while (otherPlayers.Count > 0 && otherPlayers.Count > numAlivePlayers) {
-                    Destroy(otherPlayers[otherPlayers.Count - 1].gameObject);
-                    otherPlayers.RemoveAt(otherPlayers.Count - 1);
+                while (playersInGame.Count > 0 && playersInGame.Count > numAlivePlayers) {
+                    Destroy(playersInGame[playersInGame.Count - 1].gameObject);
+                    playersInGame.RemoveAt(playersInGame.Count - 1);
                 }
 
                 break;
@@ -255,12 +263,12 @@ public class GameClient : MonoBehaviour {
                 int winner = packet.ReadInt();
 
                 // clear otherplayers list
-                for (int i = 0; i < otherPlayers.Count; ++i) {
-                    if (otherPlayers[i].playerID != winner) {
-                        Destroy(otherPlayers[i].gameObject);
+                for (int i = 0; i < playersInGame.Count; ++i) {
+                    if (playersInGame[i].playerID != winner) {
+                        Destroy(playersInGame[i].gameObject);
                     }
                 }
-                otherPlayers.Clear();
+                playersInGame.Clear();
 
                 // save level data
                 levelLoad = new int[packet.ReadInt()];
@@ -273,26 +281,51 @@ public class GameClient : MonoBehaviour {
                 FindObjectOfType<SceneLoader>().fadeOutWithText(message);
 
                 break;
-            case PacketType.PLAYER_JOIN:
+            case PacketType.PLAYER_JOINED_ROOM:    // a player joined your room
                 int pjid = packet.ReadInt();
                 string pjname = packet.ReadString();
                 Color32 pjcolor = packet.ReadColor();
-                playersOnServer.Add(new PlayerInfo(pjid, pjname, pjcolor));
-                luc.logConnectionMessage(pjname, pjcolor, true);
+                Debug.Log("CLIENT: player joined room " + pjname);
+                playersInMyRoom.Add(new PlayerInfo(pjid, pjname, pjcolor));
+                lobbyUI.logConnectionMessage(pjname, pjcolor, true, false);
                 break;
-            case PacketType.PLAYER_LEFT:
+            case PacketType.PLAYER_LEFT_ROOM:    // a player left your room
                 int plid = packet.ReadInt();
-                for (int i = 0; i < playersOnServer.Count; ++i) {
-                    PlayerInfo pi = playersOnServer[i];
+                for (int i = 0; i < playersInMyRoom.Count; ++i) {
+                    PlayerInfo pi = playersInMyRoom[i];
                     if (pi.id == plid) {
-                        luc.logConnectionMessage(pi.name, pi.color, false);
-                        playersOnServer.RemoveAt(i);
+                        lobbyUI.logConnectionMessage(pi.name, pi.color, false, false);
+                        playersInMyRoom.RemoveAt(i);
                         break;
                     }
                 }
                 break;
             case PacketType.CHAT_MESSAGE:
-                luc.logPlayerMessage(packet.ReadString(), packet.ReadColor(), packet.ReadString());
+                lobbyUI.logChatMessage(packet.ReadString(), packet.ReadColor(), packet.ReadString());
+                break;
+            case PacketType.CREATE_ROOM:
+                // only time client will receive a packet of this type is if
+                // they tried to create a room but it didnt work
+                waitingForRoomCreateResponse = false;
+                lobbyUI.onCreateRoomFailure();
+                break;
+            case PacketType.YOU_JOINED_ROOM:  // you joined a room
+                waitingForRoomCreateResponse = false;
+                roomName = packet.ReadString();
+                lobbyUI.updateRoomUI(roomName);
+                len = packet.ReadInt();
+                while (playersInMyRoom.Count > 1) {
+                    playersInMyRoom.RemoveAt(playersInMyRoom.Count - 1);
+                }
+                for (int i = 0; i < len; ++i) {
+                    playersInMyRoom.Add(new PlayerInfo(packet.ReadInt(), packet.ReadString(), packet.ReadColor()));
+                }
+                break;
+            case PacketType.PLAYER_JOINED_SERVER:
+                lobbyUI.logConnectionMessage(packet.ReadString(), packet.ReadColor(), true, true);
+                break;
+            case PacketType.PLAYER_LEFT_SERVER:
+                lobbyUI.logConnectionMessage(packet.ReadString(), packet.ReadColor(), false, true);
                 break;
             default:
                 break;
@@ -330,7 +363,7 @@ public class GameClient : MonoBehaviour {
         serverSocket = NetworkTransport.Connect(clientSocket, remoteAddress, remotePort, 0, out error);
 
         // set up UI for login
-        muc.setupLoginUI();
+        menuUI.setupLoginUI();
 
         // can delete server script now if not used
         if (!enabledServer) {
@@ -338,8 +371,8 @@ public class GameClient : MonoBehaviour {
         }
     }
 
-    // tries to join game with given name and password
-    public void tryJoiningGame(string name, string password) {
+    // tries to login with given name and password
+    public void tryLogin(string name, string password) {
         if (waitingForLoginResponse) {
             return;
         }
@@ -353,12 +386,23 @@ public class GameClient : MonoBehaviour {
 
     }
 
-    public IList<PlayerInfo> getPlayerInfoList() {
-        return playersOnServer.AsReadOnly();
+    public void tryCreateRoom(string name) {
+        if (waitingForRoomCreateResponse) {
+            return;
+        }
+        waitingForRoomCreateResponse = true;
+
+        Packet p = new Packet(PacketType.CREATE_ROOM);
+        p.Write(name);
+        sendPacket(p);
     }
 
-    public PlayerInfo getOurPlayer() {
-        return playersOnServer[0];
+    public IList<PlayerInfo> getPlayerInfoList() {
+        return playersInMyRoom.AsReadOnly();
+    }
+
+    public PlayerInfo getMyPlayer() {
+        return playersInMyRoom[0];
     }
 
 }

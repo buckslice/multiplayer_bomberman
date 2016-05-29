@@ -12,9 +12,13 @@ public enum PacketType : byte {
     SPAWN_BOMB,
     PLAYER_DIED,
     RESTART_GAME,
-    PLAYER_JOIN,
-    PLAYER_LEFT,
     GAME_START,
+    PLAYER_JOINED_ROOM,
+    PLAYER_LEFT_ROOM,
+    PLAYER_JOINED_SERVER,
+    PLAYER_LEFT_SERVER,
+    YOU_JOINED_ROOM,
+    CREATE_ROOM,
 }
 
 public class Packet {

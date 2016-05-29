@@ -37,16 +37,16 @@ public class MenuUIController : MonoBehaviour {
 
         // hit enter to try to join game with current credentials
         if (Input.GetKeyDown(KeyCode.Return)) {
-            tryJoinWithCurrentCredentials();
+            tryLoginWithInputs();
         }
     }
 
-    public void tryJoinWithCurrentCredentials() {
+    public void tryLoginWithInputs() {
         if (nameInputField.text == "" || passwordInputField.text == "") {
             setStatusText("Enter name and password", Color.red, true);
             Debug.Log("CLIENT: no name/password entered");
         } else {
-            client.tryJoiningGame(nameInputField.text, passwordInputField.text);
+            client.tryLogin(nameInputField.text, passwordInputField.text);
         }
     }
 

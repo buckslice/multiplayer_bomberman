@@ -9,6 +9,10 @@ public class LobbyUIController : MonoBehaviour {
     public Text playerNamesText;
     public Text chatLogText;
     public InputField chatInputBar;
+    public InputField createRoomInputField;
+    public Button createRoomButton;
+    public Text roomTitleText;
+    public GameObject roomListPanel;
 
     public GameClient client { private get; set; }
 
@@ -33,12 +37,12 @@ public class LobbyUIController : MonoBehaviour {
                 chatInputBar.ActivateInputField();
             } else if (chatInputBar.text.Length != 0) {   // send message if just hit enter
                 Packet p = new Packet(PacketType.CHAT_MESSAGE);
-                PlayerInfo me = client.getOurPlayer();
+                PlayerInfo me = client.getMyPlayer();
                 p.Write(me.name);
                 p.Write(me.color);
                 p.Write(chatInputBar.text);
                 client.sendPacket(p);
-                logPlayerMessage(me.name, me.color, chatInputBar.text);
+                logChatMessage(me.name, me.color, chatInputBar.text);
                 chatInputBar.text = "";
             }
         }
@@ -50,7 +54,6 @@ public class LobbyUIController : MonoBehaviour {
             StringBuilder sb = new StringBuilder();
 
             IList<PlayerInfo> playerInfos = client.getPlayerInfoList();
-
             for (int i = 0; i < playerInfos.Count; ++i) {
                 PlayerInfo ps = playerInfos[i];
                 sb.Append(getNameWithColor(ps.name, ps.color));
@@ -60,26 +63,33 @@ public class LobbyUIController : MonoBehaviour {
         }
     }
 
-    private StringBuilder getChatLog() {
-        StringBuilder sb = new StringBuilder();
-        if (firstChat) {
-            chatLogText.text = "";
-            chatLogText.rectTransform.sizeDelta = new Vector2(0, 0);
-            firstChat = false;
+    // called when menu button is pressed
+    public void tryCreateRoom() {
+        string roomName = createRoomInputField.text;
+        if (roomName != "") {
+            client.tryCreateRoom(roomName);
+            createRoomButton.interactable = false;
         } else {
-            sb.Append(chatLogText.text);
-            sb.Append("\n");
+            logError("Enter a room name!");
         }
-        return sb;
     }
 
-    private void updateChat(StringBuilder sb) {
-        chatLogText.text = sb.ToString();
-        float newHeight = LayoutUtility.GetPreferredHeight(chatLogText.rectTransform);
-        chatLogText.rectTransform.sizeDelta = new Vector2(0, newHeight);
+    public void onCreateRoomFailure() {
+        createRoomButton.interactable = true;
+        logError("Room name taken!");
     }
 
-    public void logPlayerMessage(string name, Color32 color, string message) {
+    public void updateRoomUI(string roomName) {
+        roomTitleText.text = roomName;
+        logMessage("Joined " + roomName);
+        if (roomName == "Lobby") {
+            roomListPanel.SetActive(true);
+        } else {
+            roomListPanel.SetActive(false);
+        }
+    }
+
+    public void logChatMessage(string name, Color32 color, string message) {
         StringBuilder sb = getChatLog();
         sb.Append("[");
         sb.Append(getNameWithColor(name, color));
@@ -88,13 +98,55 @@ public class LobbyUIController : MonoBehaviour {
         updateChat(sb);
     }
 
-    public void logConnectionMessage(string name, Color color, bool joined) {
+    public void logConnectionMessage(string name, Color32 color, bool joined, bool server) {
         StringBuilder sb = getChatLog();
-        sb.Append("[<color=#ff0000>SERVER</color>] <");
+        if (server) {
+            sb.Append("[<color=#ff0000>SERVER</color>] <");
+        } else {
+            sb.Append("<");
+        }
         sb.Append(getNameWithColor(name, color));
         sb.Append("> ");
-        sb.Append(joined ? "JOINED" : "LEFT");
+        if (server) {
+            sb.Append(joined ? "connected" : "disconnected");
+        } else {
+            sb.Append(joined ? "joined the room" : "left the room");
+        }
         updateChat(sb);
+    }
+
+    public void logMessage(string message) {
+        StringBuilder sb = getChatLog();
+        sb.Append(message);
+        updateChat(sb);
+    }
+
+    public void logError(string message) {
+        StringBuilder sb = getChatLog();
+        sb.Append("<color=#ff00ff>[ERROR] ");
+        sb.Append(message);
+        sb.Append("</color>");
+        updateChat(sb);
+    }
+
+    private StringBuilder getChatLog() {
+        StringBuilder sb = new StringBuilder();
+        if (firstChat) {
+            chatLogText.text = "";
+            chatLogText.rectTransform.sizeDelta = new Vector2(0, 0);
+            sb.Append("<< Hit Enter to Chat! >>\n");
+            firstChat = false;
+        } else {
+            sb.Append(chatLogText.text);
+        }
+        sb.Append("\n");
+        return sb;
+    }
+
+    private void updateChat(StringBuilder sb) {
+        chatLogText.text = sb.ToString();
+        float newHeight = LayoutUtility.GetPreferredHeight(chatLogText.rectTransform);
+        chatLogText.rectTransform.sizeDelta = new Vector2(0, newHeight);
     }
 
     private string getNameWithColor(string name, Color32 color) {
