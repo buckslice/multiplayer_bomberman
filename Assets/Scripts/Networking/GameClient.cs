@@ -8,24 +8,7 @@ using System.Text;
 
 public class GameClient : MonoBehaviour {
     public GameObject playerPrefab;
-
-    // menu screen stuff
-    public GameObject background;
-    public GameObject startClientButton;
-    public GameObject joinButton;
-    public InputField nameInputField;
-    public InputField passwordInputField;
-    public Text statusText;
-
-    // lobby screen stuff
-    private Text playerNamesText;
-    private Text chatLogText;
-    private GameObject chatInputBar;
-    private Text chatInputText;
-
-
-    private IEnumerator statusTextAnim;
-
+    
     private byte channelReliable;
     private HostTopology topology;
     private int maxConnections = 4;
@@ -51,11 +34,11 @@ public class GameClient : MonoBehaviour {
     private bool enabledServer = false;
     private float timeUntilStartServer = 2.0f;
 
-    private float updateNamesTimer = 0.0f;
-    private bool typingInChat = false;
-    private bool firstChat = true;
-    private string chatString;
     private bool inLobby = true;
+
+    private MenuUIController muc;
+    private LobbyUIController luc;
+    private float updateNamesTimer = 0.0f;
 
     // internal class different from servers PlayerState
     class PlayerState {
@@ -71,15 +54,10 @@ public class GameClient : MonoBehaviour {
 
     void OnEnable() {
         Application.runInBackground = true; // for debugging purposes
-        //Destroy(gameObject.GetComponent<GameServer>());
         DontDestroyOnLoad(gameObject);
 
-        // UI stuff
-        startClientButton.SetActive(false);
-        statusText.gameObject.SetActive(true);
-
-        statusTextAnim = statusTextAnimRoutine();
-        StartCoroutine(statusTextAnim);
+        muc = FindObjectOfType<MenuUIController>();
+        muc.setupStartingUI(this);
 
         // network init
         NetworkTransport.Init();
@@ -91,12 +69,9 @@ public class GameClient : MonoBehaviour {
     }
 
     void OnLevelWasLoaded(int levelNum) {
-        if (levelNum == 1) {
-            playerNamesText = GameObject.Find("ConnectedPlayerNames").GetComponent<Text>();
-            chatLogText = GameObject.Find("ChatContent").GetComponent<Text>();
-            chatInputBar = GameObject.Find("ChatInputBar");
-            chatInputText = chatInputBar.transform.Find("ChatInputText").GetComponent<Text>();
-            chatInputBar.SetActive(false);
+        if(levelNum == 1) {
+            luc = FindObjectOfType<LobbyUIController>();
+            luc.client = this;
         }
 
         //GameObject levelGO = GameObject.Find("Level");
@@ -119,22 +94,8 @@ public class GameClient : MonoBehaviour {
 
     // Update is called once per frame
     void Update() {
-        // if in menu scene then make pressing tab switch
-        // between name and password input fields and make
-        // hitting enter try to join with current credentials
         if (SceneManager.GetActiveScene().buildIndex == 0) {
-            if (Input.GetKeyDown(KeyCode.Tab)) {
-                if (nameInputField.isFocused) {
-                    passwordInputField.ActivateInputField();
-                } else {
-                    nameInputField.ActivateInputField();
-                }
-            }
-            if (Input.GetKeyDown(KeyCode.Return)) {
-                tryJoiningGame();
-            }
-
-            // if havnt connected to a server and waited then start one
+            // if havnt connected to a server and waited long enough then start one
             timeUntilStartServer -= Time.deltaTime;
             if (!enabledServer && serverSocket < 0 && timeUntilStartServer < 0.0f) {
                 Debug.Log("Enabling Server");
@@ -148,51 +109,17 @@ public class GameClient : MonoBehaviour {
                 StringBuilder sb = new StringBuilder();
                 for (int i = 0; i < playersOnServer.Count; ++i) {
                     PlayerState ps = playersOnServer[i];
-                    sb.Append(getNameWithColor(ps.name, ps.color));
+                    sb.Append(luc.getNameWithColor(ps.name, ps.color));
                     sb.Append('\n');
                 }
-
-                playerNamesText.text = sb.ToString();
-            }
-
-            // do chat update
-            if (Input.GetKeyDown(KeyCode.Return)) {
-                typingInChat = !typingInChat;
-                chatInputBar.SetActive(typingInChat);
-                if (!typingInChat && chatString.Length != 0) {    // just hit enter so send message
-                    Packet p = new Packet(PacketType.CHAT_MESSAGE);
-                    PlayerState me = playersOnServer[0];
-                    p.Write(me.name);
-                    p.Write(me.color);
-                    p.Write(chatString);
-                    sendPacket(p);
-                    processChatString(me.name, me.color, chatString);
-                    chatString = "";
-                }
-            }
-            // gather keypresses for message
-            if (typingInChat) {
-                string inputs = Input.inputString;
-                for (int i = 0; i < inputs.Length; ++i) {
-                    char c = inputs[i];
-                    if (c == '\b') {
-                        if (chatString.Length != 0) {
-                            chatString = chatString.Substring(0, chatString.Length - 1);
-                        }
-                    } else if (c == '\n') {
-                        // can just ignore i think?
-                    } else {
-                        chatString += c;
-                    }
-                }
-                chatInputText.text = chatString;
+                luc.setPlayerNames(sb.ToString());
             }
         }
 
         checkMessages();
     }
 
-    public void checkMessages() {
+    private void checkMessages() {
         if (clientSocket < 0) {
             return;
         }
@@ -219,10 +146,10 @@ public class GameClient : MonoBehaviour {
                     if (serverSocket >= 0) { // already connected to a server
                         break;
                     }
-                    StopCoroutine(statusTextAnim);
+                    muc.stopStatusTextAnim();
                     Debug.Log("CLIENT: found server broadcast!");
-                    statusText.text = !enabledServer ? "Found Server!" : "Created Server!";
-                    flashStatusText(Color.yellow);
+                    string statusText = !enabledServer ? "Found Server!" : "Created Server!";
+                    muc.setStatusText(statusText, Color.yellow, true);
 
                     // get broadcast message (not doing anything with it currently)
                     NetworkTransport.GetBroadcastConnectionMessage(clientSocket, buffer, bsize, out dataSize, out error);
@@ -258,7 +185,7 @@ public class GameClient : MonoBehaviour {
         NetworkTransport.Send(clientSocket, serverSocket, channelReliable, p.getData(), p.getSize(), out error);
     }
 
-    public void receivePacket(Packet packet) {
+    private void receivePacket(Packet packet) {
         PacketType pt = (PacketType)packet.ReadByte();
 
         int id;
@@ -279,21 +206,16 @@ public class GameClient : MonoBehaviour {
                         Color32 pcolor = packet.ReadColor();
                         playersOnServer.Add(new PlayerState(pid, pname, pcolor));
                     }
-
                     Debug.Log("CLIENT: authenticated by server, joining game");
-                    statusText.text = "Login successful!";
-                    statusText.color = Color.yellow;
-
+                    muc.setStatusText("Login successful!", Color.yellow, false);
                     // load into next scene
                     SceneManager.LoadScene(1);
                 } else if (id == -1) {
                     Debug.Log("CLIENT: invalid login");
-                    statusText.text = "Invalid login info!";
-                    flashStatusText(Color.red);
+                    muc.setStatusText("Invalid login info!", Color.red, true);
                 } else if (id == -2) {
                     Debug.Log("CLIENT: already loggged in");
-                    statusText.text = "Already logged in!";
-                    flashStatusText(Color.red);
+                    muc.setStatusText("Alread logged in!", Color.red, true);
                 }
                 break;
 
@@ -378,33 +300,14 @@ public class GameClient : MonoBehaviour {
                 }
                 break;
             case PacketType.CHAT_MESSAGE:
-                processChatString(packet.ReadString(), packet.ReadColor(), packet.ReadString());
+                luc.processChatString(packet.ReadString(), packet.ReadColor(), packet.ReadString());
                 break;
             default:
                 break;
         }
     }
 
-    private void processChatString(string name, Color32 c, string content) {
-        if (firstChat) {
-            chatLogText.text = "";
-            chatLogText.rectTransform.sizeDelta = new Vector2(0, 0);
-            firstChat = false;
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.Append(getNameWithColor(name, c));
-        sb.Append(": ");
-        sb.Append(content);
-        sb.Append("\n");
-        sb.Append(chatLogText.text);
-
-        chatLogText.text = sb.ToString();
-        float newHeight = LayoutUtility.GetPreferredHeight(chatLogText.rectTransform);
-        chatLogText.rectTransform.sizeDelta = new Vector2(0, newHeight);
-    }
-
-    IEnumerator tryConnectRoutine() {
+    private IEnumerator tryConnectRoutine() {
         while (clientSocket < 0) {
             clientSocket = NetworkTransport.AddHost(topology, port);
             if (clientSocket < 0) {
@@ -418,7 +321,7 @@ public class GameClient : MonoBehaviour {
         Debug.Log("CLIENT: connected on port: " + port);
     }
 
-    IEnumerator waitThenReconnect(float waitTime, string remoteAddress, int remotePort) {
+    private IEnumerator waitThenReconnect(float waitTime, string remoteAddress, int remotePort) {
         timeUntilStartServer = 100.0f;
         yield return new WaitForSeconds(waitTime);
 
@@ -435,11 +338,7 @@ public class GameClient : MonoBehaviour {
         serverSocket = NetworkTransport.Connect(clientSocket, remoteAddress, remotePort, 0, out error);
 
         // set up UI for login
-        statusText.text = "Enter Login Info:";
-        flashStatusText(Color.green);
-        nameInputField.gameObject.SetActive(true);
-        passwordInputField.gameObject.SetActive(true);
-        joinButton.SetActive(true);
+        muc.setupLoginUI();
 
         // can delete server script now if not used
         if (!enabledServer) {
@@ -447,80 +346,29 @@ public class GameClient : MonoBehaviour {
         }
     }
 
-    // tries to join game with current input field credentials
-    public void tryJoiningGame() {
+    // tries to join game with given name and password
+    public void tryJoiningGame(string name, string password) {
         if (waitingForLoginResponse) {
             return;
         }
-        if (nameInputField.text == "" || passwordInputField.text == "") {
-            statusText.text = "Enter name and password!";
-            flashStatusText(Color.red);
-            Debug.Log("CLIENT: no name/password entered");
-            return;
-        }
+        waitingForLoginResponse = true;
 
         // send packet with username and password
         Packet p = new Packet(PacketType.LOGIN);
-        p.Write(nameInputField.text);
-        p.Write(passwordInputField.text);
+        p.Write(name);
+        p.Write(password);
         sendPacket(p);
 
-        waitingForLoginResponse = true;
     }
 
-    private string getNameWithColor(string name, Color32 color) {
-        StringBuilder sb = new StringBuilder();
-        sb.Append("<color=#");
-        sb.Append(color.r.ToString("X2"));
-        sb.Append(color.g.ToString("X2"));
-        sb.Append(color.b.ToString("X2"));
-        sb.Append(">");
-        sb.Append(name);
-        sb.Append("</color>");
-        return sb.ToString();
+    public void sendChatMessage(string message) {
+        Packet p = new Packet(PacketType.CHAT_MESSAGE);
+        PlayerState me = playersOnServer[0];
+        p.Write(me.name);
+        p.Write(me.color);
+        p.Write(message);
+        sendPacket(p);
+        luc.processChatString(me.name, me.color, message);
     }
 
-    // UI ENUMERATORS
-    IEnumerator flashStatusTextHandle;
-    public void flashStatusText(Color color) {
-        if (flashStatusTextHandle != null) {
-            StopCoroutine(flashStatusTextHandle);
-        }
-        flashStatusTextHandle = flashStatusTextRoutine(color);
-        StartCoroutine(flashStatusTextHandle);
-    }
-
-    IEnumerator flashStatusTextRoutine(Color c) {
-        float t = 0.0f;
-        while (t < 1.0f) {
-            t += Time.deltaTime;
-            statusText.color = Color.Lerp(Color.white, c, t);
-            yield return null;
-        }
-        statusText.color = c;
-        flashStatusTextHandle = null;
-    }
-
-    IEnumerator statusTextAnimRoutine() {
-        int dots = 3;
-        float timestep = 1.0f;
-        float t = 0.0f;
-
-        while (true) {
-            t += Time.deltaTime;
-
-            if (t > timestep) {
-                dots = (dots + 1) % 4;
-                string ds = "";
-                for (int i = 0; i < dots; i++) {
-                    ds += ".";
-                }
-                statusText.text = "Looking for Server" + ds;
-
-                t -= timestep;
-            }
-            statusText.color = Color.Lerp(Color.yellow, Color.green, t);
-            yield return null;
-        }
-    }
 }
