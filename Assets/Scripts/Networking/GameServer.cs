@@ -313,6 +313,13 @@ public class GameServer : MonoBehaviour {
             case PacketType.PLAYER_DIED:
                 getPlayerByID(clientID).alive = false;
                 break;
+            case PacketType.CHAT_MESSAGE:
+                p = new Packet(PacketType.CHAT_MESSAGE);
+                p.Write(packet.ReadString());
+                p.Write(packet.ReadColor());
+                p.Write(packet.ReadString());
+                broadcastToAllButOne(p, clientID, 0);   // only to lobby
+                break;
             default:
                 break;
         }

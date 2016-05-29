@@ -18,7 +18,11 @@ public class GameClient : MonoBehaviour {
     public Text statusText;
 
     // lobby screen stuff
-    public Text playerNamesText;
+    private Text playerNamesText;
+    private Text chatLogText;
+    private GameObject chatInputBar;
+    private Text chatInputText;
+
 
     private IEnumerator statusTextAnim;
 
@@ -48,6 +52,10 @@ public class GameClient : MonoBehaviour {
     private float timeUntilStartServer = 2.0f;
 
     private float updateNamesTimer = 0.0f;
+    private bool typingInChat = false;
+    private bool firstChat = true;
+    private string chatString;
+    private bool inLobby = true;
 
     // internal class different from servers PlayerState
     class PlayerState {
@@ -82,6 +90,33 @@ public class GameClient : MonoBehaviour {
 
     }
 
+    void OnLevelWasLoaded(int levelNum) {
+        if (levelNum == 1) {
+            playerNamesText = GameObject.Find("ConnectedPlayerNames").GetComponent<Text>();
+            chatLogText = GameObject.Find("ChatContent").GetComponent<Text>();
+            chatInputBar = GameObject.Find("ChatInputBar");
+            chatInputText = chatInputBar.transform.Find("ChatInputText").GetComponent<Text>();
+            chatInputBar.SetActive(false);
+        }
+
+        //GameObject levelGO = GameObject.Find("Level");
+        //if (levelGO && levelNum == 1) {
+        //    level = levelGO.GetComponent<Level>();
+
+        //    for (int i = 0; i < levelLoad.Length; ++i) {
+        //        level.setTile(i, levelLoad[i]);
+        //    }
+        //    level.BuildMesh();
+
+        //    // spawn player for this client
+        //    GameObject pgo = (GameObject)Instantiate(playerPrefab, spawn, Quaternion.identity);
+        //    pgo.GetComponent<PlayerSync>().init(playerID, this);
+
+        //    // delay starting the game a little so the client can get rid of old state packets from server
+        //    StartCoroutine(setFullyLoaded(0.3f));
+        //}
+    }
+
     // Update is called once per frame
     void Update() {
         // if in menu scene then make pressing tab switch
@@ -111,45 +146,50 @@ public class GameClient : MonoBehaviour {
             if (updateNamesTimer < 0.0f) {
                 updateNamesTimer = 0.5f;
                 StringBuilder sb = new StringBuilder();
-                for(int i = 0; i < playersOnServer.Count; ++i) {
+                for (int i = 0; i < playersOnServer.Count; ++i) {
                     PlayerState ps = playersOnServer[i];
-                    sb.Append("<color=#");
-                    sb.Append(ps.color.r.ToString("X2"));
-                    sb.Append(ps.color.g.ToString("X2"));
-                    sb.Append(ps.color.b.ToString("X2"));
-                    sb.Append(">");
-                    sb.Append(ps.name);
-                    sb.Append("</color>\n");
+                    sb.Append(getNameWithColor(ps.name, ps.color));
+                    sb.Append('\n');
                 }
 
                 playerNamesText.text = sb.ToString();
             }
+
+            // do chat update
+            if (Input.GetKeyDown(KeyCode.Return)) {
+                typingInChat = !typingInChat;
+                chatInputBar.SetActive(typingInChat);
+                if (!typingInChat && chatString.Length != 0) {    // just hit enter so send message
+                    Packet p = new Packet(PacketType.CHAT_MESSAGE);
+                    PlayerState me = playersOnServer[0];
+                    p.Write(me.name);
+                    p.Write(me.color);
+                    p.Write(chatString);
+                    sendPacket(p);
+                    processChatString(me.name, me.color, chatString);
+                    chatString = "";
+                }
+            }
+            // gather keypresses for message
+            if (typingInChat) {
+                string inputs = Input.inputString;
+                for (int i = 0; i < inputs.Length; ++i) {
+                    char c = inputs[i];
+                    if (c == '\b') {
+                        if (chatString.Length != 0) {
+                            chatString = chatString.Substring(0, chatString.Length - 1);
+                        }
+                    } else if (c == '\n') {
+                        // can just ignore i think?
+                    } else {
+                        chatString += c;
+                    }
+                }
+                chatInputText.text = chatString;
+            }
         }
 
         checkMessages();
-    }
-
-    void OnLevelWasLoaded(int levelNum) {
-        if(levelNum == 1) {
-            playerNamesText = GameObject.Find("ConnectedPlayerNames").GetComponent<Text>();
-        }
-
-        //GameObject levelGO = GameObject.Find("Level");
-        //if (levelGO && levelNum == 1) {
-        //    level = levelGO.GetComponent<Level>();
-
-        //    for (int i = 0; i < levelLoad.Length; ++i) {
-        //        level.setTile(i, levelLoad[i]);
-        //    }
-        //    level.BuildMesh();
-
-        //    // spawn player for this client
-        //    GameObject pgo = (GameObject)Instantiate(playerPrefab, spawn, Quaternion.identity);
-        //    pgo.GetComponent<PlayerSync>().init(playerID, this);
-
-        //    // delay starting the game a little so the client can get rid of old state packets from server
-        //    StartCoroutine(setFullyLoaded(0.3f));
-        //}
     }
 
     public void checkMessages() {
@@ -330,16 +370,38 @@ public class GameClient : MonoBehaviour {
                 break;
             case PacketType.PLAYER_LEFT:
                 int plid = packet.ReadInt();
-                for(int i = 0; i < playersOnServer.Count; ++i) {
-                    if(playersOnServer[i].id == plid) {
+                for (int i = 0; i < playersOnServer.Count; ++i) {
+                    if (playersOnServer[i].id == plid) {
                         playersOnServer.RemoveAt(i);
                         break;
                     }
                 }
                 break;
+            case PacketType.CHAT_MESSAGE:
+                processChatString(packet.ReadString(), packet.ReadColor(), packet.ReadString());
+                break;
             default:
                 break;
         }
+    }
+
+    private void processChatString(string name, Color32 c, string content) {
+        if (firstChat) {
+            chatLogText.text = "";
+            chatLogText.rectTransform.sizeDelta = new Vector2(0, 0);
+            firstChat = false;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.Append(getNameWithColor(name, c));
+        sb.Append(": ");
+        sb.Append(content);
+        sb.Append("\n");
+        sb.Append(chatLogText.text);
+
+        chatLogText.text = sb.ToString();
+        float newHeight = LayoutUtility.GetPreferredHeight(chatLogText.rectTransform);
+        chatLogText.rectTransform.sizeDelta = new Vector2(0, newHeight);
     }
 
     IEnumerator tryConnectRoutine() {
@@ -404,6 +466,18 @@ public class GameClient : MonoBehaviour {
         sendPacket(p);
 
         waitingForLoginResponse = true;
+    }
+
+    private string getNameWithColor(string name, Color32 color) {
+        StringBuilder sb = new StringBuilder();
+        sb.Append("<color=#");
+        sb.Append(color.r.ToString("X2"));
+        sb.Append(color.g.ToString("X2"));
+        sb.Append(color.b.ToString("X2"));
+        sb.Append(">");
+        sb.Append(name);
+        sb.Append("</color>");
+        return sb.ToString();
     }
 
     // UI ENUMERATORS

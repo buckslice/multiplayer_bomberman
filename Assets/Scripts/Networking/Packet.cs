@@ -7,6 +7,7 @@ using System.IO;
 public enum PacketType : byte {
     LOGIN,
     MESSAGE,
+    CHAT_MESSAGE,
     STATE_UPDATE,
     SPAWN_BOMB,
     PLAYER_DIED,
