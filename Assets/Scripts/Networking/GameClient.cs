@@ -6,6 +6,18 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 
+// internal class different from servers PlayerState
+public class PlayerInfo {
+    public int id;
+    public string name;
+    public Color32 color;
+    public PlayerInfo(int id, string name, Color32 color) {
+        this.id = id;
+        this.name = name;
+        this.color = color;
+    }
+}
+
 public class GameClient : MonoBehaviour {
     public GameObject playerPrefab;
     
@@ -25,7 +37,7 @@ public class GameClient : MonoBehaviour {
     private bool waitingForLoginResponse = false;
 
     // this client is always at the first entry
-    private List<PlayerState> playersOnServer = new List<PlayerState>();
+    private List<PlayerInfo> playersOnServer = new List<PlayerInfo>();
     private List<PlayerSync> otherPlayers = new List<PlayerSync>();
 
     private int[] levelLoad;
@@ -38,19 +50,6 @@ public class GameClient : MonoBehaviour {
 
     private MenuUIController muc;
     private LobbyUIController luc;
-    private float updateNamesTimer = 0.0f;
-
-    // internal class different from servers PlayerState
-    class PlayerState {
-        public int id;
-        public string name;
-        public Color32 color;
-        public PlayerState(int id, string name, Color32 color) {
-            this.id = id;
-            this.name = name;
-            this.color = color;
-        }
-    }
 
     void OnEnable() {
         Application.runInBackground = true; // for debugging purposes
@@ -102,18 +101,8 @@ public class GameClient : MonoBehaviour {
                 gameObject.GetComponent<GameServer>().enabled = true;
                 enabledServer = true;
             }
-        } else {
-            updateNamesTimer -= Time.deltaTime;
-            if (updateNamesTimer < 0.0f) {
-                updateNamesTimer = 0.5f;
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < playersOnServer.Count; ++i) {
-                    PlayerState ps = playersOnServer[i];
-                    sb.Append(luc.getNameWithColor(ps.name, ps.color));
-                    sb.Append('\n');
-                }
-                luc.setPlayerNames(sb.ToString());
-            }
+        } else {    // scene 1
+
         }
 
         checkMessages();
@@ -197,14 +186,14 @@ public class GameClient : MonoBehaviour {
                     string name = packet.ReadString();
                     Color32 color = packet.ReadColor();
                     playersOnServer.Clear();
-                    playersOnServer.Add(new PlayerState(id, name, color));
+                    playersOnServer.Add(new PlayerInfo(id, name, color));
 
                     int numPlayers = packet.ReadInt();
                     for (int i = 0; i < numPlayers; ++i) {
                         int pid = packet.ReadInt();
                         string pname = packet.ReadString();
                         Color32 pcolor = packet.ReadColor();
-                        playersOnServer.Add(new PlayerState(pid, pname, pcolor));
+                        playersOnServer.Add(new PlayerInfo(pid, pname, pcolor));
                     }
                     Debug.Log("CLIENT: authenticated by server, joining game");
                     muc.setStatusText("Login successful!", Color.yellow, false);
@@ -288,19 +277,22 @@ public class GameClient : MonoBehaviour {
                 int pjid = packet.ReadInt();
                 string pjname = packet.ReadString();
                 Color32 pjcolor = packet.ReadColor();
-                playersOnServer.Add(new PlayerState(pjid, pjname, pjcolor));
+                playersOnServer.Add(new PlayerInfo(pjid, pjname, pjcolor));
+                luc.logConnectionMessage(pjname, pjcolor, true);
                 break;
             case PacketType.PLAYER_LEFT:
                 int plid = packet.ReadInt();
                 for (int i = 0; i < playersOnServer.Count; ++i) {
-                    if (playersOnServer[i].id == plid) {
+                    PlayerInfo pi = playersOnServer[i];
+                    if (pi.id == plid) {
+                        luc.logConnectionMessage(pi.name, pi.color, false);
                         playersOnServer.RemoveAt(i);
                         break;
                     }
                 }
                 break;
             case PacketType.CHAT_MESSAGE:
-                luc.processChatString(packet.ReadString(), packet.ReadColor(), packet.ReadString());
+                luc.logPlayerMessage(packet.ReadString(), packet.ReadColor(), packet.ReadString());
                 break;
             default:
                 break;
@@ -361,14 +353,12 @@ public class GameClient : MonoBehaviour {
 
     }
 
-    public void sendChatMessage(string message) {
-        Packet p = new Packet(PacketType.CHAT_MESSAGE);
-        PlayerState me = playersOnServer[0];
-        p.Write(me.name);
-        p.Write(me.color);
-        p.Write(message);
-        sendPacket(p);
-        luc.processChatString(me.name, me.color, message);
+    public IList<PlayerInfo> getPlayerInfoList() {
+        return playersOnServer.AsReadOnly();
+    }
+
+    public PlayerInfo getOurPlayer() {
+        return playersOnServer[0];
     }
 
 }
