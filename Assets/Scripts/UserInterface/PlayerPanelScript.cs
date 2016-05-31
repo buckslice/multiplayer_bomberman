@@ -6,12 +6,19 @@ public class PlayerPanelScript : MonoBehaviour {
 
     public Text playerNameText;
     public Text toggleText;
+    public Toggle toggle;
 
     private RectTransform rt;
 
     // Use this for initialization
     void Awake () {
         rt = GetComponent<RectTransform>();
+    }
+
+    public void setToggle(bool b) {
+        if (toggle) {
+            toggle.isOn = b;
+        }
     }
 
     public void init(Transform parent) {

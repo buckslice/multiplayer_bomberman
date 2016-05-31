@@ -128,6 +128,7 @@ public class LobbyUIController : MonoBehaviour {
                 if (i == myIndex) {
                     pps = myPlayerPanel;
                     offset = 1;
+                    pps.setToggle(playerInfos[i].ready);
                 } else {
                     pps = otherPlayerPanels[i - offset];
                 }
@@ -214,11 +215,16 @@ public class LobbyUIController : MonoBehaviour {
         updateChat(sb);
     }
 
+    public void logMessage(string message, Color color) {
+        StringBuilder sb = getChatLog();
+        sb.Append(getTextWithColor(message, color));
+        updateChat(sb);
+    }
+
     public void logError(string message) {
         StringBuilder sb = getChatLog();
-        sb.Append("<color=#ff00ff>[ERROR] ");
-        sb.Append(message);
-        sb.Append("</color>");
+        sb.Append("[ERROR] ");
+        sb.Append(getTextWithColor(message, Color.magenta));
         updateChat(sb);
     }
 

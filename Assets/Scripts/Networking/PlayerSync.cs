@@ -3,8 +3,7 @@ using System.Collections;
 
 public class PlayerSync : MonoBehaviour {
 
-    private int _playerID = -1;
-    public int playerID { get { return _playerID; } }
+    public int playerID { get; private set; }
 
     private GameClient gameClient = null;
     private bool initiliazed = false;
@@ -13,35 +12,27 @@ public class PlayerSync : MonoBehaviour {
     private Vector3 lastPos;
     private Vector3 targPos;
 
-    public GameObject mesh;
+    public MeshRenderer mesh;
+
+    void Awake() {
+        playerID = -1;
+    }
 
     // if a GameClient reference is not provided this will be considered
     // a remote player instance
-    public void init(int playerID, GameClient gc = null) {
+    public void init(int playerID, Color32 color, GameClient gc = null) {
         if (initiliazed) {
             return;
         }
         initiliazed = true;
+        this.playerID = playerID;
         lastPos = transform.position;
         targPos = transform.position;
-        _playerID = playerID;
-        switch (_playerID)
-        {
-            case 1:
-                mesh.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.red);
-                break;
-            case 2:
-                mesh.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.blue);
-                break;
-            case 3:
-                mesh.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.green);
-                break;
-            case 4:
-                mesh.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.yellow);
-                break;
-        }
-        
-        
+
+        MaterialPropertyBlock mpb = new MaterialPropertyBlock();
+        mpb.SetColor("_Color", color);
+        mesh.SetPropertyBlock(mpb);
+
         gameClient = gc;
         PlayerController pc = GetComponent<PlayerController>();
         if (gameClient) {

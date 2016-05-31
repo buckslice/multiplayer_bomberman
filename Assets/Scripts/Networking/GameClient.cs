@@ -39,7 +39,7 @@ public class GameClient : MonoBehaviour {
     private bool waitingForRoomChangeResponse = false;
 
     // this client is always at the first entry
-    private List<PlayerInfo> playersInMyRoom = new List<PlayerInfo>();
+    private List<PlayerInfo> playersInRoom = new List<PlayerInfo>();
     private int indexInRoom = -1;
     private List<PlayerSync> playersInGame = new List<PlayerSync>();
     public string roomName { get; private set; }
@@ -209,7 +209,7 @@ public class GameClient : MonoBehaviour {
                     menuUI.setStatusText("Invalid login info!", Color.red, true);
                 } else if (id == -2) {
                     Debug.Log("CLIENT: already loggged in");
-                    menuUI.setStatusText("Alread logged in!", Color.red, true);
+                    menuUI.setStatusText("Already logged in!", Color.red, true);
                 }
                 break;
 
@@ -225,7 +225,7 @@ public class GameClient : MonoBehaviour {
                     }
 
                     // if player id mismatch then delete because he got disconnected
-                    while (i < playersInGame.Count && playersInGame[i].playerID != id) {
+                    while (i < playersInGame.Count && playersInGame[i].playerID  != id) {
                         Destroy(playersInGame[i].gameObject);
                         playersInGame.RemoveAt(i);
                     }
@@ -233,7 +233,7 @@ public class GameClient : MonoBehaviour {
                     if (i == playersInGame.Count) {
                         GameObject pgo = (GameObject)Instantiate(playerPrefab, pos, Quaternion.identity);
                         PlayerSync newPlayer = pgo.GetComponent<PlayerSync>();
-                        newPlayer.init(id);
+                        newPlayer.init(id, playersInRoom[i].color);
                         playersInGame.Add(newPlayer);
                     } else {  // otherwise sync positions of other players
                         playersInGame[i].updatePosition(pos);
@@ -256,42 +256,42 @@ public class GameClient : MonoBehaviour {
                 level.placeBomb(packet.ReadVector3(), false, 3);
                 break;
 
-            case PacketType.RESTART_GAME:
-                int winner = packet.ReadInt();
+            //case PacketType.RESTART_GAME:
+            //    int winner = packet.ReadInt();
 
-                // clear otherplayers list
-                for (int i = 0; i < playersInGame.Count; ++i) {
-                    if (playersInGame[i].playerID != winner) {
-                        Destroy(playersInGame[i].gameObject);
-                    }
-                }
-                playersInGame.Clear();
+            //    // clear otherplayers list
+            //    for (int i = 0; i < playersInGame.Count; ++i) {
+            //        if (playersInGame[i].playerID != winner) {
+            //            Destroy(playersInGame[i].gameObject);
+            //        }
+            //    }
+            //    playersInGame.Clear();
 
-                // save level data
-                levelLoad = new int[packet.ReadInt()];
-                for (int i = 0; i < levelLoad.Length; ++i) {
-                    levelLoad[i] = packet.ReadByte();
-                }
-                // save player spawn
-                spawn = packet.ReadVector3();
-                string message = packet.ReadString();
-                FindObjectOfType<SceneLoader>().fadeOutWithText(message);
+            //    // save level data
+            //    levelLoad = new int[packet.ReadInt()];
+            //    for (int i = 0; i < levelLoad.Length; ++i) {
+            //        levelLoad[i] = packet.ReadByte();
+            //    }
+            //    // save player spawn
+            //    spawn = packet.ReadVector3();
+            //    string message = packet.ReadString();
+            //    FindObjectOfType<SceneLoader>().fadeOutWithText(message);
 
                 break;
             case PacketType.PLAYER_JOINED_ROOM:    // a player joined your room
                 int pjid = packet.ReadInt();
                 string pjname = packet.ReadString();
                 Color32 pjcolor = packet.ReadColor();
-                playersInMyRoom.Add(new PlayerInfo(pjid, pjname, pjcolor, false));
+                playersInRoom.Add(new PlayerInfo(pjid, pjname, pjcolor, false));
                 lobbyUI.updateRoomNames();
                 lobbyUI.logConnectionMessage(pjname, pjcolor, true, false);
                 break;
             case PacketType.PLAYER_LEFT_ROOM:    // a player left your room
                 int plid = packet.ReadInt();
-                for (int i = 0; i < playersInMyRoom.Count; ++i) {
-                    PlayerInfo pi = playersInMyRoom[i];
+                for (int i = 0; i < playersInRoom.Count; ++i) {
+                    PlayerInfo pi = playersInRoom[i];
                     if (pi.id == plid) {
-                        playersInMyRoom.RemoveAt(i);
+                        playersInRoom.RemoveAt(i);
                         indexInRoom = -1;
                         lobbyUI.updateRoomNames();
                         lobbyUI.logConnectionMessage(pi.name, pi.color, false, false);
@@ -313,9 +313,9 @@ public class GameClient : MonoBehaviour {
                 waitingForRoomChangeResponse = false;
                 roomName = packet.ReadString();
                 len = packet.ReadInt();
-                playersInMyRoom.Clear();
+                playersInRoom.Clear();
                 for (int i = 0; i < len; ++i) {
-                    playersInMyRoom.Add(new PlayerInfo(
+                    playersInRoom.Add(new PlayerInfo(
                         packet.ReadInt(), packet.ReadString(), packet.ReadColor(), packet.ReadBool()));
                 }
                 indexInRoom = -1;
@@ -345,14 +345,33 @@ public class GameClient : MonoBehaviour {
                 break;
             case PacketType.SET_READY:
                 string playerName = packet.ReadString();
-                for (int i = 0; i < playersInMyRoom.Count; ++i) {
-                    if (playersInMyRoom[i].name == playerName) {
-                        playersInMyRoom[i].ready = packet.ReadBool();
+                for (int i = 0; i < playersInRoom.Count; ++i) {
+                    if (playersInRoom[i].name == playerName) {
+                        playersInRoom[i].ready = packet.ReadBool();
                         break;
                     }
                 }
                 lobbyUI.updateRoomNames();
+                break;
+            case PacketType.GAME_COUNTDOWN:
+                int t = packet.ReadInt();
+                if (t == 0) {
+                    lobbyUI.logMessage("Game Start!", Color.yellow);
+                    // read level data
+                    // read spawn
+                    // spawn gameObjects for each player in room
+                    //int numPlayers = packet.ReadInt();
+                    //for(int i = 0; i < numPlayers; ++i) {
+                    //    Vector3 spawn = packet.ReadVector3();
+                    //    GameObject pgo = (GameObject)Instantiate(playerPrefab, spawn, Quaternion.identity);
+                    //    PlayerSync newPlayer = pgo.GetComponent<PlayerSync>();
+                    //    newPlayer.init(id);
+                    //    playersInGame.Add(newPlayer);
+                    //}
 
+                } else {
+                    lobbyUI.logMessage(t + "...", Color.yellow);
+                }
                 break;
             default:
                 break;
@@ -426,7 +445,7 @@ public class GameClient : MonoBehaviour {
     }
 
     public IList<PlayerInfo> getPlayerInfoList() {
-        return playersInMyRoom.AsReadOnly();
+        return playersInRoom.AsReadOnly();
     }
 
     public void setReady(bool ready) {
@@ -434,13 +453,13 @@ public class GameClient : MonoBehaviour {
         p.Write(ready);
         sendPacket(p);
 
-        playersInMyRoom[getMyPlayerIndex()].ready = ready;
+        playersInRoom[getMyPlayerIndex()].ready = ready;
     }
 
     public int getMyPlayerIndex() {
         if (indexInRoom < 0) {   // dirty
-            for (int i = 0; i < playersInMyRoom.Count; ++i) {
-                if (playersInMyRoom[i].name == myName) {
+            for (int i = 0; i < playersInRoom.Count; ++i) {
+                if (playersInRoom[i].name == myName) {
                     indexInRoom = i;
                     return indexInRoom;
                 }
@@ -451,7 +470,7 @@ public class GameClient : MonoBehaviour {
     }
 
     public PlayerInfo getMyPlayer() {
-        return playersInMyRoom[getMyPlayerIndex()];
+        return playersInRoom[getMyPlayerIndex()];
     }
 
 }

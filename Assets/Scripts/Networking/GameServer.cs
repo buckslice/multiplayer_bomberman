@@ -17,8 +17,8 @@ public class GameServer : MonoBehaviour {
     private List<int> clients = new List<int>();
 
     // list of connected players sorted by rooms (players[0] is lobby room
-    private List<List<PlayerState>> players = new List<List<PlayerState>>();
-    private List<string> roomNames = new List<string>();
+    //private List<List<PlayerState>> players = new List<List<PlayerState>>();
+    private List<Room> rooms = new List<Room>();
 
     // maps playerID to their index in player list
     private Dictionary<int, PlayerIndex> playerIndices = new Dictionary<int, PlayerIndex>();
@@ -26,6 +26,18 @@ public class GameServer : MonoBehaviour {
     private DatabaseUtil dbUtil;
 
     private Level level;
+
+    class Room {
+        public string name;
+        public float countdownTimer = 5.0f;
+        public List<PlayerState> players = new List<PlayerState>();
+        public Room(string name) {
+            this.name = name;
+        }
+        public bool gameInProgress() {
+            return countdownTimer <= 0.0f;
+        }
+    }
 
     class PlayerIndex {
         public int room;
@@ -83,46 +95,75 @@ public class GameServer : MonoBehaviour {
             Debug.Log("SERVER: started but not broadcasting!");
         }
 
-        // create lobby room 0
-        players.Add(new List<PlayerState>());
-        roomNames.Add("Lobby");
-        //SceneManager.LoadScene(1);
+        // create lobby room at index 0
+        rooms.Add(new Room("Lobby"));
+
     }
 
     // Update is called once per frame
     void Update() {
+        updateRooms();
 
-        // for each active room send out state updates
-        for (int room = 1; room < players.Count; ++room) {
-            List<PlayerState> playersInRoom = players[room];
+        checkMessages();
+    }
+
+    void updateRooms() {
+        // check each room thats not the lobby
+        for (int roomIndex = 1; roomIndex < rooms.Count; ++roomIndex) {
+            Room room = rooms[roomIndex];
+            List<PlayerState> playersInRoom = rooms[roomIndex].players;
             if (playersInRoom.Count < 2) { // room still filling up
                 continue;
             }
-            Packet updatePacket = new Packet(PacketType.STATE_UPDATE);
+            // check if all players are ready
+            bool allReady = true;
+            for (int i = 0; i < playersInRoom.Count; ++i) {
+                if (!playersInRoom[i].ready) {
+                    allReady = false;
+                    break;
+                }
+            }
+            if (room.countdownTimer > 0) {
+                if (allReady) {
+                    int btime = (int)(room.countdownTimer + 1);
+                    room.countdownTimer -= Time.deltaTime;
+                    int ptime = (int)(room.countdownTimer + 1);
+                    if (ptime != btime) {
+                        if (ptime == 0) {
+                            generateAndSendStartPackets(roomIndex);
+                        } else {
+                            Packet cdPacket = new Packet(PacketType.GAME_COUNTDOWN);
+                            cdPacket.Write(ptime);
+                            broadcastPacket(cdPacket, roomIndex);
+                        }
+                    }
+                } else {
+                    room.countdownTimer = 5.0f;
+                }
+                continue;
+            }
 
             // find number of alive players in this room (also check for winner while your at it)
-            int winner = -1;
+            PlayerState winner = null;
             int numAlive = 0;
             for (int i = 0; i < playersInRoom.Count; ++i) {
                 if (playersInRoom[i].alive) {
                     ++numAlive;
-                    winner = playersInRoom[i].id;
+                    winner = playersInRoom[i];
                 }
             }
-            if (numAlive == 0) {
-                // draw
-            } else if (numAlive == 1) {
-                // player 'winner' won
-            }// else game still going
+            if(numAlive <= 1) { // if either of these then game is over
+                string message = (numAlive == 0 ? "It's a Draw!" : winner.name + " wins!");
 
-            for (int i = 0; i < playersInRoom.Count; ++i) {
-                if (playersInRoom[i].alive) {
-                    numAlive++;
-                }
+                // move all players back to lobby
+                // delete room
+                continue;
             }
+
+            // else game still going so send state updates
+            Packet updatePacket = new Packet(PacketType.STATE_UPDATE);
             updatePacket.Write(numAlive);
-
-            // send positions of ether players in room
+            // send positions of other alive players in room
             for (int i = 0; i < playersInRoom.Count; ++i) {
                 if (playersInRoom[i].alive) {
                     updatePacket.Write(playersInRoom[i].id);
@@ -130,11 +171,34 @@ public class GameServer : MonoBehaviour {
                 }
             }
             // send out packet to all players in room
-            broadcastPacket(updatePacket, room);
+            broadcastPacket(updatePacket, roomIndex);
 
         }
+    }
 
-        checkMessages();
+    private void generateAndSendStartPackets(int roomIndex) {
+        GameObject levelGO = GameObject.Find("Level");
+        if (levelGO) {
+            level = levelGO.GetComponent<Level>();
+            level.GenerateLevel();
+        } else {
+            Debug.LogError("SERVER: Can't find Level");
+            return;
+        }
+        List<PlayerState> players = rooms[roomIndex].players;
+        for (int i = 0; i < players.Count; ++i) {
+            Packet cdPacket = new Packet(PacketType.GAME_COUNTDOWN);
+            cdPacket.Write(0);
+
+            int[] tiles = level.getTiles();
+            cdPacket.Write(tiles.Length);
+            for (int j = 0; j < tiles.Length; j++) {
+                cdPacket.Write((byte)tiles[j]);
+            }
+            cdPacket.Write(level.getRandomGroundPosition());
+
+            sendPacket(cdPacket, players[i].id);
+        }
     }
 
     void LateUpdate() {
@@ -165,14 +229,6 @@ public class GameServer : MonoBehaviour {
         //}
     }
 
-    void OnLevelWasLoaded(int levelNum) {
-        GameObject levelGO = GameObject.Find("Level");
-        if (levelGO) {
-            level = levelGO.GetComponent<Level>();
-            //level.GenerateLevel();
-        }
-    }
-
     private void sendPacket(Packet p, int clientID) {
         byte error;
         NetworkTransport.Send(serverSocket, clientID, channelReliable, p.getData(), p.getSize(), out error);
@@ -180,36 +236,36 @@ public class GameServer : MonoBehaviour {
 
     // broadcasts packet to all connected players
     private void broadcastPacket(Packet packet) {
-        for (int r = 0; r < players.Count; ++r) {
-            for (int i = 0; i < players[r].Count; ++i) {
-                sendPacket(packet, players[r][i].id);
+        for (int r = 0; r < rooms.Count; ++r) {
+            for (int i = 0; i < rooms[r].players.Count; ++i) {
+                sendPacket(packet, rooms[r].players[i].id);
             }
         }
     }
     // same as above but to certain room only
     private void broadcastPacket(Packet packet, int room) {
-        for (int i = 0; i < players[room].Count; ++i) {
-            sendPacket(packet, players[room][i].id);
+        for (int i = 0; i < rooms[room].players.Count; ++i) {
+            sendPacket(packet, rooms[room].players[i].id);
         }
     }
     // broadcasts packet to all connected players except one
     private void broadcastToAllButOne(Packet packet, int excludeClientID) {
-        for (int r = 0; r < players.Count; ++r) {
-            for (int i = 0; i < players[r].Count; ++i) {
-                if (players[r][i].id == excludeClientID) {
+        for (int r = 0; r < rooms.Count; ++r) {
+            for (int i = 0; i < rooms[r].players.Count; ++i) {
+                if (rooms[r].players[i].id == excludeClientID) {
                     continue;
                 }
-                sendPacket(packet, players[r][i].id);
+                sendPacket(packet, rooms[r].players[i].id);
             }
         }
     }
     // same as above but to certain room only
     private void broadcastToAllButOne(Packet packet, int excludeClientID, int room) {
-        for (int i = 0; i < players[room].Count; ++i) {
-            if (players[room][i].id == excludeClientID) {
+        for (int i = 0; i < rooms[room].players.Count; ++i) {
+            if (rooms[room].players[i].id == excludeClientID) {
                 continue;
             }
-            sendPacket(packet, players[room][i].id);
+            sendPacket(packet, rooms[room].players[i].id);
         }
     }
 
@@ -317,7 +373,7 @@ public class GameServer : MonoBehaviour {
                     bool creating = packet.ReadBool();  // is client trying to create a room
                     string roomName = packet.ReadString();
                     if (creating) {
-                        if (roomNames.Contains(roomName) || roomName == "") { // fail
+                        if (roomExists(roomName) || roomName == "") { // fail
                             Debug.Log("SERVER: player failed to create room: " + roomName);
                             p = new Packet(PacketType.CHANGE_ROOM);
                             p.Write(true);
@@ -325,14 +381,12 @@ public class GameServer : MonoBehaviour {
                         } else {
                             Debug.Log("SERVER: player created room: " + roomName);
                             // create room
-                            roomNames.Add(roomName);
-                            players.Add(new List<PlayerState>());
-
-                            movePlayerToRoom(getPlayerByID(clientID), players.Count - 1);
+                            rooms.Add(new Room(roomName));
+                            movePlayerToRoom(getPlayerByID(clientID), rooms.Count - 1);
                         }
                     } else {
-                        if (roomNames.Contains(roomName)) {
-                            int roomIndex = roomNames.FindIndex(x => x == roomName);
+                        if (roomExists(roomName)) {
+                            int roomIndex = rooms.FindIndex(x => x.name == roomName);
                             movePlayerToRoom(getPlayerByID(clientID), roomIndex);
                         } else {
                             p = new Packet(PacketType.CHANGE_ROOM);
@@ -359,8 +413,8 @@ public class GameServer : MonoBehaviour {
     // player will be moved into this room and sent a list of all other players in the room
     // all players in new room will be notified that this player joined
     private void movePlayerToRoom(PlayerState player, int roomIndex) {
-        Debug.Assert(roomIndex >= 0 && roomIndex < players.Count);
-
+        Debug.Assert(roomIndex >= 0 && roomIndex < rooms.Count);
+        player.ready = false;
         // remove player from list and recalculate indices
         if (playerIndices.ContainsKey(player.id)) { // checks incase the player is new to the server
             PlayerIndex pi = playerIndices[player.id];
@@ -370,17 +424,18 @@ public class GameServer : MonoBehaviour {
             bpPacket.Write(player.id);
             broadcastToAllButOne(bpPacket, player.id, pi.room);
 
-            players[pi.room].RemoveAt(pi.index);
+            rooms[pi.room].players.RemoveAt(pi.index);
         }
-        players[roomIndex].Add(player);
+        rooms[roomIndex].players.Add(player);
         recalculateIndices();
 
         // give new player a list of all players in the room
         Packet npPacket = new Packet(PacketType.YOU_JOINED_ROOM);
-        npPacket.Write(roomNames[roomIndex]);    // send them the room name
-        npPacket.Write(players[roomIndex].Count);  // number of players in room
-        for (int i = 0; i < players[roomIndex].Count; ++i) {
-            PlayerState ps = players[roomIndex][i];
+        npPacket.Write(rooms[roomIndex].name);    // send them the room name
+        int numPlayers = rooms[roomIndex].players.Count;
+        npPacket.Write(numPlayers);  // number of players in room
+        for (int i = 0; i < numPlayers; ++i) {
+            PlayerState ps = rooms[roomIndex].players[i];
             npPacket.Write(ps.id);
             npPacket.Write(ps.name);
             npPacket.Write(ps.color);
@@ -397,20 +452,18 @@ public class GameServer : MonoBehaviour {
         broadcastToAllButOne(opPacket, player.id, roomIndex);
 
         // checks and removes any empty rooms
-        for (int i = 1; i < players.Count; ++i) {
-            if (players[i].Count == 0) {
-                players.RemoveAt(i);
-                roomNames.RemoveAt(i);
-                i--;
+        for (int i = 1; i < rooms.Count; ++i) {
+            if (rooms[i].players.Count == 0) {
+                rooms.RemoveAt(i--);
             }
         }
 
         // broadcast a new roomlist packet to everyone in lobby
         Packet ruPacket = new Packet(PacketType.ROOM_LIST_UPDATE);
-        ruPacket.Write(roomNames.Count - 1);
-        for (int i = 1; i < roomNames.Count; ++i) {
-            ruPacket.Write(roomNames[i]);       // send name of room
-            ruPacket.Write(players[i].Count);   // send number of players in room
+        ruPacket.Write(rooms.Count - 1);
+        for (int i = 1; i < rooms.Count; ++i) {
+            ruPacket.Write(rooms[i].name);           // send name of room
+            ruPacket.Write(rooms[i].players.Count);  // send number of players in room
         }
         broadcastPacket(ruPacket, 0);
     }
@@ -431,7 +484,7 @@ public class GameServer : MonoBehaviour {
             broadcastPacket(lrPacket, getPlayerRoom(ps.id));
 
             PlayerIndex pi = playerIndices[clientID];
-            players[pi.room].RemoveAt(pi.index);
+            rooms[pi.room].players.RemoveAt(pi.index);
 
             recalculateIndices();
         }
@@ -441,9 +494,9 @@ public class GameServer : MonoBehaviour {
     // should be done whenever a player moves between rooms or disconnects
     private void recalculateIndices() {
         playerIndices.Clear();
-        for (int r = 0; r < players.Count; r++) {
-            for (int i = 0; i < players[r].Count; i++) {
-                playerIndices[players[r][i].id] = new PlayerIndex(r, i);
+        for (int r = 0; r < rooms.Count; r++) {
+            for (int i = 0; i < rooms[r].players.Count; i++) {
+                playerIndices[rooms[r].players[i].id] = new PlayerIndex(r, i);
             }
         }
     }
@@ -456,19 +509,26 @@ public class GameServer : MonoBehaviour {
     private PlayerState getPlayerByID(int clientID) {
         Debug.Assert(playerIndices.ContainsKey(clientID));
         PlayerIndex pi = playerIndices[clientID];
-        return players[pi.room][pi.index];
+        return rooms[pi.room].players[pi.index];
     }
 
-    // check if any currently connected players has this name
     private bool isNameUnique(string name) {
-        for (int r = 0; r < players.Count; ++r) {
-            for (int i = 0; i < players[r].Count; ++i) {
-                if (players[r][i].name == name) {
+        for (int r = 0; r < rooms.Count; ++r) {
+            for (int i = 0; i < rooms[r].players.Count; ++i) {
+                if (rooms[r].players[i].name == name) {
                     return false;
                 }
             }
         }
         return true;
+    }
+    private bool roomExists(string name) {
+        for (int i = 0; i < rooms.Count; ++i) {
+            if (rooms[i].name == name) {
+                return true;
+            }
+        }
+        return false;
     }
 
 }

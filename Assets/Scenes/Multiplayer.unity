@@ -1081,6 +1081,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   playerNameText: {fileID: 613417417}
   toggleText: {fileID: 984749696}
+  toggle: {fileID: 582182237}
 --- !u!222 &281360297
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1277,7 +1278,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 53383329}
   m_Direction: 2
   m_Value: 0
-  m_Size: 0.97542995
+  m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
