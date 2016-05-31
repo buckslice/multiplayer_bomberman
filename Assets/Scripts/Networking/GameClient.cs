@@ -254,7 +254,7 @@ public class GameClient : MonoBehaviour {
                 break;
 
             case PacketType.SPAWN_BOMB:
-                level.placeBomb(packet.ReadVector3(), false);
+                level.placeBomb(packet.ReadVector3(), false, 2);
                 break;
 
             case PacketType.RESTART_GAME:
