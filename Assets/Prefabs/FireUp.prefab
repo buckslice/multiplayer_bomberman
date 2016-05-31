@@ -13,7 +13,7 @@ GameObject:
   - 23: {fileID: 2376490}
   - 114: {fileID: 11428798}
   m_Layer: 0
-  m_Name: PowerUp
+  m_Name: FireUp
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -87,6 +87,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8c3d3a6d4f0e9ae459cd9cd11bd0daf2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  pickupSound: {fileID: 0}
 --- !u!1001 &100100000
 Prefab:
   m_ObjectHideFlags: 1

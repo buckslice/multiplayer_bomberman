@@ -11,10 +11,12 @@ public class PlayerInfo {
     public int id;
     public string name;
     public Color32 color;
-    public PlayerInfo(int id, string name, Color32 color) {
+    public bool ready;
+    public PlayerInfo(int id, string name, Color32 color, bool ready) {
         this.id = id;
         this.name = name;
         this.color = color;
+        this.ready = ready;
     }
 }
 
@@ -38,8 +40,10 @@ public class GameClient : MonoBehaviour {
 
     // this client is always at the first entry
     private List<PlayerInfo> playersInMyRoom = new List<PlayerInfo>();
+    private int indexInRoom = -1;
     private List<PlayerSync> playersInGame = new List<PlayerSync>();
-    private string roomName;
+    public string roomName { get; private set; }
+    private string myName;
 
     private int[] levelLoad;
     private Vector3 spawn;
@@ -54,6 +58,7 @@ public class GameClient : MonoBehaviour {
     // after because the scene transition was causing problems
     private int loadFrames = 0;
     private bool dontCheckMessages = false;
+    private bool justConnected = true;
 
     void OnEnable() {
         Application.runInBackground = true; // for debugging purposes
@@ -75,7 +80,6 @@ public class GameClient : MonoBehaviour {
         if (levelNum == 1) {
             lobbyUI = FindObjectOfType<LobbyUIController>();
             lobbyUI.client = this;
-            lobbyUI.updateRoomNames();
         }
 
         //GameObject levelGO = GameObject.Find("Level");
@@ -109,8 +113,6 @@ public class GameClient : MonoBehaviour {
         } else {    // scene 1
             if (dontCheckMessages && ++loadFrames > 2) {
                 dontCheckMessages = false;
-                PlayerInfo pi = getMyPlayer();
-                lobbyUI.logConnectionMessage(pi.name, pi.color, true, true);
             }
         }
 
@@ -195,11 +197,8 @@ public class GameClient : MonoBehaviour {
                 waitingForLoginResponse = false;
                 id = packet.ReadInt();
                 if (id >= 0) {
-                    string name = packet.ReadString();
-                    Color32 color = packet.ReadColor();
-                    playersInMyRoom.Clear();
-                    playersInMyRoom.Add(new PlayerInfo(id, name, color));
                     Debug.Log("CLIENT: authenticated by server, joining lobby");
+                    myName = packet.ReadString();
                     menuUI.setStatusText("Login successful!", Color.yellow, false);
 
                     // load into next scene
@@ -220,7 +219,7 @@ public class GameClient : MonoBehaviour {
                 for (int i = 0, index = 0; index < numAlivePlayers; ++index) {
                     id = packet.ReadInt();
                     Vector3 pos = packet.ReadVector3();
-                    if (playersInMyRoom[0].id == id) {
+                    if (i == getMyPlayerIndex()) {
                         myPlayerAlive = true;
                         continue; // ignore own position given from server for now
                     }
@@ -283,8 +282,7 @@ public class GameClient : MonoBehaviour {
                 int pjid = packet.ReadInt();
                 string pjname = packet.ReadString();
                 Color32 pjcolor = packet.ReadColor();
-                Debug.Log("CLIENT: joined room: " + pjname);
-                playersInMyRoom.Add(new PlayerInfo(pjid, pjname, pjcolor));
+                playersInMyRoom.Add(new PlayerInfo(pjid, pjname, pjcolor, false));
                 lobbyUI.updateRoomNames();
                 lobbyUI.logConnectionMessage(pjname, pjcolor, true, false);
                 break;
@@ -293,9 +291,10 @@ public class GameClient : MonoBehaviour {
                 for (int i = 0; i < playersInMyRoom.Count; ++i) {
                     PlayerInfo pi = playersInMyRoom[i];
                     if (pi.id == plid) {
-                        lobbyUI.logConnectionMessage(pi.name, pi.color, false, false);
                         playersInMyRoom.RemoveAt(i);
+                        indexInRoom = -1;
                         lobbyUI.updateRoomNames();
+                        lobbyUI.logConnectionMessage(pi.name, pi.color, false, false);
                         break;
                     }
                 }
@@ -310,17 +309,23 @@ public class GameClient : MonoBehaviour {
                 waitingForRoomChangeResponse = false;
                 break;
 
-            case PacketType.JOINED_ROOM:  // you joined a room
+            case PacketType.YOU_JOINED_ROOM:  // you joined a room
                 waitingForRoomChangeResponse = false;
                 roomName = packet.ReadString();
-                lobbyUI.updateRoomUI(roomName);
                 len = packet.ReadInt();
-                while (playersInMyRoom.Count > 1) {
-                    playersInMyRoom.RemoveAt(playersInMyRoom.Count - 1);
-                }
+                playersInMyRoom.Clear();
                 for (int i = 0; i < len; ++i) {
-                    playersInMyRoom.Add(new PlayerInfo(packet.ReadInt(), packet.ReadString(), packet.ReadColor()));
+                    playersInMyRoom.Add(new PlayerInfo(
+                        packet.ReadInt(), packet.ReadString(), packet.ReadColor(), packet.ReadBool()));
                 }
+                indexInRoom = -1;
+                if (justConnected) {
+                    justConnected = false;
+                    PlayerInfo pi = getMyPlayer();
+                    lobbyUI.logConnectionMessage(pi.name, pi.color, true, true);
+                }
+
+                lobbyUI.changedRoom(roomName);
                 lobbyUI.updateRoomNames();
                 break;
             case PacketType.PLAYER_JOINED_SERVER:
@@ -332,11 +337,22 @@ public class GameClient : MonoBehaviour {
             case PacketType.ROOM_LIST_UPDATE:
                 List<string> roomListUpdate = new List<string>();
                 len = packet.ReadInt();
-                for(int i = 0; i < len; ++i) {
+                for (int i = 0; i < len; ++i) {
                     roomListUpdate.Add(packet.ReadString());
                     roomListUpdate.Add(packet.ReadInt().ToString());
                 }
                 lobbyUI.updateRoomList(roomListUpdate);
+                break;
+            case PacketType.SET_READY:
+                string playerName = packet.ReadString();
+                for (int i = 0; i < playersInMyRoom.Count; ++i) {
+                    if (playersInMyRoom[i].name == playerName) {
+                        playersInMyRoom[i].ready = packet.ReadBool();
+                        break;
+                    }
+                }
+                lobbyUI.updateRoomNames();
+
                 break;
             default:
                 break;
@@ -413,8 +429,29 @@ public class GameClient : MonoBehaviour {
         return playersInMyRoom.AsReadOnly();
     }
 
+    public void setReady(bool ready) {
+        Packet p = new Packet(PacketType.SET_READY);
+        p.Write(ready);
+        sendPacket(p);
+
+        playersInMyRoom[getMyPlayerIndex()].ready = ready;
+    }
+
+    public int getMyPlayerIndex() {
+        if (indexInRoom < 0) {   // dirty
+            for (int i = 0; i < playersInMyRoom.Count; ++i) {
+                if (playersInMyRoom[i].name == myName) {
+                    indexInRoom = i;
+                    return indexInRoom;
+                }
+            }
+        }
+        Debug.Assert(indexInRoom >= 0, "Can't find my player in my room!");
+        return indexInRoom;
+    }
+
     public PlayerInfo getMyPlayer() {
-        return playersInMyRoom[0];
+        return playersInMyRoom[getMyPlayerIndex()];
     }
 
 }

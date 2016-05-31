@@ -20,6 +20,8 @@ public class LobbyUIController : MonoBehaviour {
     public RectTransform roomContent;
     public RectTransform roomScrollView;
     public Object joinRoomPanelPrefab;
+    public Object otherPlayerPanelPrefab;
+    public PlayerPanelScript myPlayerPanel;
 
     public GameClient client { private get; set; }
 
@@ -27,6 +29,7 @@ public class LobbyUIController : MonoBehaviour {
 
     // list of room names and join buttons
     private List<RoomPanelEditor> roomPanels = new List<RoomPanelEditor>();
+    private List<PlayerPanelScript> otherPlayerPanels = new List<PlayerPanelScript>();
 
     // Use this for initialization
     void Start() {
@@ -57,18 +60,6 @@ public class LobbyUIController : MonoBehaviour {
         }
     }
 
-    public void updateRoomNames() {
-        StringBuilder sb = new StringBuilder();
-
-        IList<PlayerInfo> playerInfos = client.getPlayerInfoList();
-        for (int i = 0; i < playerInfos.Count; ++i) {
-            PlayerInfo ps = playerInfos[i];
-            sb.Append(getNameWithColor(ps.name, ps.color));
-            sb.Append('\n');
-        }
-        playerNamesText.text = sb.ToString();
-    }
-
     // called when menu button is pressed
     public void tryCreateRoom() {
         string roomName = createRoomInputField.text;
@@ -84,6 +75,11 @@ public class LobbyUIController : MonoBehaviour {
         client.tryChangeRoom(false, roomName);
     }
 
+    public void sendReadyPacket(bool ready) {
+        client.setReady(ready);
+        updateRoomNames();
+    }
+
     public void onChangeRoomFailure(bool createFail) {
         if (createFail) {
             createRoomButton.interactable = true;
@@ -93,7 +89,58 @@ public class LobbyUIController : MonoBehaviour {
         }
     }
 
-    public void updateRoomUI(string roomName) {
+    // called when someone joins the room
+    public void updateRoomNames() {
+        if (client.roomName == "Lobby") {
+            StringBuilder sb = new StringBuilder();
+
+            IList<PlayerInfo> playerInfos = client.getPlayerInfoList();
+            for (int i = 0; i < playerInfos.Count; ++i) {
+                PlayerInfo ps = playerInfos[i];
+                sb.Append(getTextWithColor(ps.name, ps.color));
+                sb.Append('\n');
+            }
+            playerNamesText.text = sb.ToString();
+        } else {    // in a room so update room UIs
+            IList<PlayerInfo> playerInfos = client.getPlayerInfoList();
+            int numPlayers = playerInfos.Count;
+            roomContent.sizeDelta = new Vector2(0, numPlayers * 75);
+
+            // if more have more panels then delete some off end
+            while (otherPlayerPanels.Count > numPlayers - 1) {
+                int endIndex = otherPlayerPanels.Count - 1;
+                Destroy(otherPlayerPanels[endIndex].gameObject);
+                otherPlayerPanels.RemoveAt(endIndex);
+            }
+
+            // if not enough panels add some to end
+            PlayerPanelScript pps;
+            while (numPlayers - 1 > otherPlayerPanels.Count) {
+                GameObject go = (GameObject)Instantiate(otherPlayerPanelPrefab, Vector3.zero, Quaternion.identity);
+                pps = go.GetComponent<PlayerPanelScript>();
+                pps.init(roomPanel.transform);
+                otherPlayerPanels.Add(pps);
+            }
+            // set name and ready text of each panel
+            int myIndex = client.getMyPlayerIndex();
+            int offset = 0;
+            for (int i = 0; i < numPlayers; ++i) {
+                if (i == myIndex) {
+                    pps = myPlayerPanel;
+                    offset = 1;
+                } else {
+                    pps = otherPlayerPanels[i - offset];
+                }
+                string pname = getTextWithColor(playerInfos[i].name, playerInfos[i].color);
+                string ttext = playerInfos[i].ready ? getTextWithColor("Ready", Color.green) : getTextWithColor("Not Ready", Color.red);
+                pps.setText(pname, ttext);
+                pps.setYPos(i * -75);
+            }
+        }
+    }
+
+    // called on room change
+    public void changedRoom(string roomName) {
         bool isLobby = roomName == "Lobby";
         if (isLobby) {
             roomTitleText.text = "Room List";
@@ -111,6 +158,7 @@ public class LobbyUIController : MonoBehaviour {
         leaveRoomButton.SetActive(!isLobby);
     }
 
+    // called whenever the room list changes
     public void updateRoomList(List<string> rooms) {
         int numRooms = rooms.Count / 2;
         roomContent.sizeDelta = new Vector2(0, (numRooms + 1) * 75);
@@ -141,7 +189,7 @@ public class LobbyUIController : MonoBehaviour {
     public void logChatMessage(string name, Color32 color, string message) {
         StringBuilder sb = getChatLog();
         sb.Append("[");
-        sb.Append(getNameWithColor(name, color));
+        sb.Append(getTextWithColor(name, color));
         sb.Append("] ");
         sb.Append(message);
         updateChat(sb);
@@ -149,12 +197,8 @@ public class LobbyUIController : MonoBehaviour {
 
     public void logConnectionMessage(string name, Color32 color, bool joined, bool server) {
         StringBuilder sb = getChatLog();
-        if (server) {
-            sb.Append("[<color=#ff0000>SERVER</color>] <");
-        } else {
-            sb.Append("<");
-        }
-        sb.Append(getNameWithColor(name, color));
+        sb.Append("<");
+        sb.Append(getTextWithColor(name, color));
         sb.Append("> ");
         if (server) {
             sb.Append(joined ? "connected" : "disconnected");
@@ -198,14 +242,14 @@ public class LobbyUIController : MonoBehaviour {
         chatLogText.rectTransform.sizeDelta = new Vector2(0, newHeight);
     }
 
-    private string getNameWithColor(string name, Color32 color) {
+    private string getTextWithColor(string text, Color32 color) {
         StringBuilder sb = new StringBuilder();
         sb.Append("<color=#");
         sb.Append(color.r.ToString("X2"));
         sb.Append(color.g.ToString("X2"));
         sb.Append(color.b.ToString("X2"));
         sb.Append(">");
-        sb.Append(name);
+        sb.Append(text);
         sb.Append("</color>");
         return sb.ToString();
     }

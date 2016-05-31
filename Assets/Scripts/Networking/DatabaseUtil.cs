@@ -54,7 +54,6 @@ public class DatabaseUtil : MonoBehaviour {
         int passwordHash = password.GetHashCode();
         cmd.CommandText = "INSERT INTO Accounts VALUES(\"" + name + "\", \"" + passwordHash + "\");";
         cmd.ExecuteNonQuery();
-        Debug.Log("SERVER: new player \"" + name + "\" joined with password \"" + password + "\"");
         return true;
     }
 }

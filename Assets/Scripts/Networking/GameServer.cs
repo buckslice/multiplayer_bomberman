@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 public class GameServer : MonoBehaviour {
     private byte channelReliable;
-    private int maxConnections = 4;
+    private int maxConnections = 16;
 
     private int port = 8888;
     private int key = 420;
@@ -19,7 +19,6 @@ public class GameServer : MonoBehaviour {
     // list of connected players sorted by rooms (players[0] is lobby room
     private List<List<PlayerState>> players = new List<List<PlayerState>>();
     private List<string> roomNames = new List<string>();
-    private int numPlayers = 0;
 
     // maps playerID to their index in player list
     private Dictionary<int, PlayerIndex> playerIndices = new Dictionary<int, PlayerIndex>();
@@ -43,6 +42,7 @@ public class GameServer : MonoBehaviour {
         public Color32 color;
         public Vector3 pos;
         public bool alive = true;
+        public bool ready = false;
         public PlayerState(int id, string name, Color32 color, Vector3 pos = new Vector3()) {
             this.id = id;
             this.name = name;
@@ -264,12 +264,14 @@ public class GameServer : MonoBehaviour {
                     // send login response back to client
                     p = new Packet(PacketType.LOGIN);
                     if (loginSuccessful && isNameUnique(name)) {
+                        Debug.Log("SERVER: new player \"" + name + "\" joined with password \"" + password + "\"");
+
                         p.Write(clientID);
                         p.Write(name);
+                        sendPacket(p, clientID);    // send login response for client
+
                         // assign player a random color (use hue shifting so always bright)
                         Color32 color = Color.HSVToRGB(Random.value, 1.0f, 1.0f);
-                        p.Write(color);
-                        sendPacket(p, clientID);
 
                         // tell everyone that a new player joined the server
                         Packet npPacket = new Packet(PacketType.PLAYER_JOINED_SERVER);
@@ -327,8 +329,6 @@ public class GameServer : MonoBehaviour {
                             players.Add(new List<PlayerState>());
 
                             movePlayerToRoom(getPlayerByID(clientID), players.Count - 1);
-
-                            sendRoomListUpdate();
                         }
                     } else {
                         if (roomNames.Contains(roomName)) {
@@ -342,7 +342,14 @@ public class GameServer : MonoBehaviour {
                     }
                 }
                 break;
-
+            case PacketType.SET_READY:
+                p = new Packet(PacketType.SET_READY);
+                PlayerState ps = getPlayerByID(clientID);
+                ps.ready = packet.ReadBool();
+                p.Write(ps.name);
+                p.Write(ps.ready);
+                broadcastToAllButOne(p, clientID, getPlayerRoom(clientID));
+                break;
             default:
                 break;
         }
@@ -364,11 +371,12 @@ public class GameServer : MonoBehaviour {
             broadcastToAllButOne(bpPacket, player.id, pi.room);
 
             players[pi.room].RemoveAt(pi.index);
-            recalculateIndices();
         }
+        players[roomIndex].Add(player);
+        recalculateIndices();
 
-        // give new player a list of other players in room
-        Packet npPacket = new Packet(PacketType.JOINED_ROOM);
+        // give new player a list of all players in the room
+        Packet npPacket = new Packet(PacketType.YOU_JOINED_ROOM);
         npPacket.Write(roomNames[roomIndex]);    // send them the room name
         npPacket.Write(players[roomIndex].Count);  // number of players in room
         for (int i = 0; i < players[roomIndex].Count; ++i) {
@@ -376,11 +384,9 @@ public class GameServer : MonoBehaviour {
             npPacket.Write(ps.id);
             npPacket.Write(ps.name);
             npPacket.Write(ps.color);
+            npPacket.Write(ps.ready);
         }
         sendPacket(npPacket, player.id);
-
-        players[roomIndex].Add(player);
-        playerIndices[player.id] = new PlayerIndex(roomIndex, players[roomIndex].Count - 1);
 
         // tell other players in room that new player joined
         Packet opPacket = new Packet(PacketType.PLAYER_JOINED_ROOM);
@@ -390,44 +396,39 @@ public class GameServer : MonoBehaviour {
 
         broadcastToAllButOne(opPacket, player.id, roomIndex);
 
-        // check to see if there are any empty rooms
-        bool shouldSendRoomUpdate = false;
+        // checks and removes any empty rooms
         for (int i = 1; i < players.Count; ++i) {
             if (players[i].Count == 0) {
                 players.RemoveAt(i);
                 roomNames.RemoveAt(i);
-                shouldSendRoomUpdate = true;
                 i--;
             }
         }
-        // send updated room list to all players in lobby
-        if (shouldSendRoomUpdate) {
-            sendRoomListUpdate();
-        }
 
-    }
-
-    private void sendRoomListUpdate() {
+        // broadcast a new roomlist packet to everyone in lobby
         Packet ruPacket = new Packet(PacketType.ROOM_LIST_UPDATE);
-        ruPacket.Write(roomNames.Count-1);
+        ruPacket.Write(roomNames.Count - 1);
         for (int i = 1; i < roomNames.Count; ++i) {
             ruPacket.Write(roomNames[i]);       // send name of room
             ruPacket.Write(players[i].Count);   // send number of players in room
         }
-        broadcastPacket(ruPacket, 0);   // broadcast packet to lobby
+        broadcastPacket(ruPacket, 0);
     }
 
     // remove client from player list if he is on it
     private void removeFromPlayers(int clientID) {
         if (playerIndices.ContainsKey(clientID)) {
-            --numPlayers;
-
             // tell everyone that a player left the server
             PlayerState ps = getPlayerByID(clientID);
             Packet npPacket = new Packet(PacketType.PLAYER_LEFT_SERVER);
             npPacket.Write(ps.name);
             npPacket.Write(ps.color);
             broadcastToAllButOne(npPacket, clientID);
+
+            // also tell people he left the room
+            Packet lrPacket = new Packet(PacketType.PLAYER_LEFT_ROOM);
+            lrPacket.Write(ps.id);
+            broadcastPacket(lrPacket, getPlayerRoom(ps.id));
 
             PlayerIndex pi = playerIndices[clientID];
             players[pi.room].RemoveAt(pi.index);

@@ -17,9 +17,10 @@ public enum PacketType : byte {
     PLAYER_LEFT_ROOM,
     PLAYER_JOINED_SERVER,
     PLAYER_LEFT_SERVER,
-    JOINED_ROOM,
+    YOU_JOINED_ROOM,
     CHANGE_ROOM,
     ROOM_LIST_UPDATE,
+    SET_READY,
 }
 
 public class Packet {
