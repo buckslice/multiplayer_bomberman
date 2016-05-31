@@ -7,17 +7,24 @@ public class LobbyUIController : MonoBehaviour {
 
     // lobby screen stuff
     public Text playerNamesText;
+    public GameObject connectedPlayerNamesPanel;
     public Text chatLogText;
     public InputField chatInputBar;
     public InputField createRoomInputField;
     public Button createRoomButton;
     public Text roomTitleText;
     public GameObject roomListPanel;
+    public GameObject roomPanel;
+    public GameObject leaveRoomButton;
+    public RectTransform roomContent;
+    public RectTransform roomScrollView;
 
     public GameClient client { private get; set; }
 
     private bool firstChat = true;
     private float updateNamesTimer = 0.0f;
+
+    private List<RoomPanelEditor> roomPanels;
 
     // Use this for initialization
     void Start() {
@@ -67,26 +74,58 @@ public class LobbyUIController : MonoBehaviour {
     public void tryCreateRoom() {
         string roomName = createRoomInputField.text;
         if (roomName != "") {
-            client.tryCreateRoom(roomName);
+            client.tryChangeRoom(true, roomName);
             createRoomButton.interactable = false;
         } else {
             logError("Enter a room name!");
         }
     }
 
-    public void onCreateRoomFailure() {
-        createRoomButton.interactable = true;
-        logError("Room name taken!");
+    public void tryChangeRoom(string roomName) {
+        client.tryChangeRoom(false, roomName);
+    }
+
+    public void onChangeRoomFailure(bool createFail) {
+        if (createFail) {
+            createRoomButton.interactable = true;
+            logError("Room name taken!");
+        } else {
+            logError("Unabled to join room");
+        }
     }
 
     public void updateRoomUI(string roomName) {
-        roomTitleText.text = roomName;
-        logMessage("Joined " + roomName);
-        if (roomName == "Lobby") {
-            roomListPanel.SetActive(true);
+        bool isLobby = roomName == "Lobby";
+        if (isLobby) {
+            roomTitleText.text = "Room List";
+            logMessage("Joined <color=#7b00ff>Lobby</color>");
+            createRoomButton.interactable = true;
         } else {
-            roomListPanel.SetActive(false);
+            string redRoomName = "<color=#ff0000>Room</color> " + roomName;
+            logMessage("Joined " + redRoomName);
+            roomTitleText.text = redRoomName;
         }
+        roomScrollView.offsetMin = new Vector2(isLobby ? 250 : 0, 0);
+        roomListPanel.SetActive(isLobby);
+        roomPanel.SetActive(!isLobby);
+        leaveRoomButton.SetActive(!isLobby);
+    }
+
+    public void roomContentChanged(int rows) {
+        // to animate a new element popping in
+        //Vector3 lpos = roomContent.localPosition;
+        //lpos.y = 75;
+        //roomContent.localPosition = lpos;
+
+        // set height of element
+        roomContent.sizeDelta = new Vector2(0, rows * 75);
+    }
+
+    public void updateRoomList(List<string> rooms) {
+        roomContentChanged(rooms.Count + 1);
+
+        // add or destroy RoomPanelPrefabs until same as number of rooms
+        // go through and set stuff through scripts
     }
 
     public void logChatMessage(string name, Color32 color, string message) {

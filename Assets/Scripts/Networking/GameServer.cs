@@ -253,38 +253,40 @@ public class GameServer : MonoBehaviour {
         Packet p;   // return packet
         switch (pt) {
             case PacketType.LOGIN:
-                string name = packet.ReadString();
-                string password = packet.ReadString();
+                {
+                    string name = packet.ReadString();
+                    string password = packet.ReadString();
 
-                // queries database for login info and returns success
-                // will add new entry if name not found
-                bool loginSuccessful = dbUtil.tryLogin(name, password);
+                    // queries database for login info and returns success
+                    // will add new entry if name not found
+                    bool loginSuccessful = dbUtil.tryLogin(name, password);
 
-                // send login response back to client
-                p = new Packet(PacketType.LOGIN);
-                if (loginSuccessful && isNameUnique(name)) {
-                    p.Write(clientID);
-                    p.Write(name);
-                    // assign player a random color (use hue shifting so always bright)
-                    Color32 color = Color.HSVToRGB(Random.value, 1.0f, 1.0f);
-                    p.Write(color);
-                    sendPacket(p, clientID);
+                    // send login response back to client
+                    p = new Packet(PacketType.LOGIN);
+                    if (loginSuccessful && isNameUnique(name)) {
+                        p.Write(clientID);
+                        p.Write(name);
+                        // assign player a random color (use hue shifting so always bright)
+                        Color32 color = Color.HSVToRGB(Random.value, 1.0f, 1.0f);
+                        p.Write(color);
+                        sendPacket(p, clientID);
 
-                    // tell everyone that a new player joined the server
-                    Packet npPacket = new Packet(PacketType.PLAYER_JOINED_SERVER);
-                    npPacket.Write(name);
-                    npPacket.Write(color);
-                    broadcastPacket(npPacket);
+                        // tell everyone that a new player joined the server
+                        Packet npPacket = new Packet(PacketType.PLAYER_JOINED_SERVER);
+                        npPacket.Write(name);
+                        npPacket.Write(color);
+                        broadcastPacket(npPacket);
 
-                    movePlayerToRoom(new PlayerState(clientID, name, color), 0);
+                        movePlayerToRoom(new PlayerState(clientID, name, color), 0);
 
-                } else {
-                    if (loginSuccessful) {
-                        p.Write(-2);    // if someone is already logged in with these credentials
                     } else {
-                        p.Write(-1);    // invalid password
+                        if (loginSuccessful) {
+                            p.Write(-2);    // if someone is already logged in with these credentials
+                        } else {
+                            p.Write(-1);    // invalid password
+                        }
+                        sendPacket(p, clientID);
                     }
-                    sendPacket(p, clientID);
                 }
                 break;
 
@@ -308,22 +310,38 @@ public class GameServer : MonoBehaviour {
                 p.Write(packet.ReadString());
                 broadcastToAllButOne(p, clientID, 0);   // only to lobby
                 break;
-            case PacketType.CREATE_ROOM:
-                string roomName = packet.ReadString();
-                if (roomNames.Contains(roomName) || roomName == "") { // fail
-                    p = new Packet(PacketType.CREATE_ROOM);
-                    sendPacket(p, clientID);
-                } else {
-                    // create room
-                    roomName = "<color=#ff0000>Room</color> " + roomName;
-                    roomNames.Add(roomName);
-                    players.Add(new List<PlayerState>());
+            case PacketType.CHANGE_ROOM:
+                {
+                    bool creating = packet.ReadBool();  // is client trying to create a room
+                    string roomName = packet.ReadString();
+                    if (creating) {
+                        if (roomNames.Contains(roomName) || roomName == "") { // fail
+                            Debug.Log("SERVER: player failed to create room: " + roomName);
+                            p = new Packet(PacketType.CHANGE_ROOM);
+                            p.Write(true);
+                            sendPacket(p, clientID);
+                        } else {
+                            Debug.Log("SERVER: player created room: " + roomName);
+                            // create room
+                            roomNames.Add(roomName);
+                            players.Add(new List<PlayerState>());
 
-                    movePlayerToRoom(getPlayerByID(clientID), players.Count - 1);
+                            movePlayerToRoom(getPlayerByID(clientID), players.Count - 1);
 
-                    // TODO broadcast to rest of players that new room is available
+                            // TODO broadcast to rest of players that new room is available
+                            // probably just send list of strings of all rooms (except lobby)
+                        }
+                    } else {
+                        if (roomNames.Contains(roomName)) {
+                            int roomIndex = roomNames.FindIndex(x => x == roomName);
+                            movePlayerToRoom(getPlayerByID(clientID), roomIndex);
+                        } else {
+                            p = new Packet(PacketType.CHANGE_ROOM);
+                            p.Write(false);
+                            sendPacket(p, clientID);
+                        }
+                    }
                 }
-
                 break;
 
             default:
@@ -350,8 +368,17 @@ public class GameServer : MonoBehaviour {
             recalculateIndices();
         }
 
+        // check to see if there are any empty rooms
+        for (int i = 1; i < players.Count; ++i) {
+            if (players[i].Count == 0) {
+                players.RemoveAt(i);
+                // send all players in lobby updated room list
+                i--;
+            }
+        }
+
         // give new player a list of other players in room
-        Packet npPacket = new Packet(PacketType.YOU_JOINED_ROOM);
+        Packet npPacket = new Packet(PacketType.JOINED_ROOM);
         npPacket.Write(roomNames[roomIndex]);    // send them the room name
         npPacket.Write(players[roomIndex].Count);  // number of players in room
         for (int i = 0; i < players[roomIndex].Count; ++i) {

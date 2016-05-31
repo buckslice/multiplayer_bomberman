@@ -34,7 +34,7 @@ public class GameClient : MonoBehaviour {
     private int serverSocket = -1;  // ID of server this client is connected to    
 
     private bool waitingForLoginResponse = false;
-    private bool waitingForRoomCreateResponse = false;
+    private bool waitingForRoomChangeResponse = false;
 
     // this client is always at the first entry
     private List<PlayerInfo> playersInMyRoom = new List<PlayerInfo>();
@@ -46,8 +46,6 @@ public class GameClient : MonoBehaviour {
     private Level level;
     private bool enabledServer = false;
     private float timeUntilStartServer = 2.0f;
-
-    private bool inLobby = true;
 
     private MenuUIController menuUI;
     private LobbyUIController lobbyUI;
@@ -303,14 +301,15 @@ public class GameClient : MonoBehaviour {
             case PacketType.CHAT_MESSAGE:
                 lobbyUI.logChatMessage(packet.ReadString(), packet.ReadColor(), packet.ReadString());
                 break;
-            case PacketType.CREATE_ROOM:
+            case PacketType.CHANGE_ROOM:
                 // only time client will receive a packet of this type is if
-                // they tried to create a room but it didnt work
-                waitingForRoomCreateResponse = false;
-                lobbyUI.onCreateRoomFailure();
+                // they tried to change a room but it failed somehow
+                lobbyUI.onChangeRoomFailure(packet.ReadBool());
+                waitingForRoomChangeResponse = false;
                 break;
-            case PacketType.YOU_JOINED_ROOM:  // you joined a room
-                waitingForRoomCreateResponse = false;
+
+            case PacketType.JOINED_ROOM:  // you joined a room
+                waitingForRoomChangeResponse = false;
                 roomName = packet.ReadString();
                 lobbyUI.updateRoomUI(roomName);
                 len = packet.ReadInt();
@@ -326,6 +325,11 @@ public class GameClient : MonoBehaviour {
                 break;
             case PacketType.PLAYER_LEFT_SERVER:
                 lobbyUI.logConnectionMessage(packet.ReadString(), packet.ReadColor(), false, true);
+                break;
+            case PacketType.ROOM_LIST_UPDATE:
+
+
+
                 break;
             default:
                 break;
@@ -347,7 +351,7 @@ public class GameClient : MonoBehaviour {
     }
 
     private IEnumerator waitThenReconnect(float waitTime, string remoteAddress, int remotePort) {
-        timeUntilStartServer = 100.0f;
+        timeUntilStartServer = 1000.0f;
         yield return new WaitForSeconds(waitTime);
 
         while (clientSocket < 0 && port > 8870) { // limit to 16 players max
@@ -386,13 +390,14 @@ public class GameClient : MonoBehaviour {
 
     }
 
-    public void tryCreateRoom(string name) {
-        if (waitingForRoomCreateResponse) {
+    public void tryChangeRoom(bool creating, string name) {
+        if (waitingForRoomChangeResponse) {
             return;
         }
-        waitingForRoomCreateResponse = true;
+        waitingForRoomChangeResponse = true;
 
-        Packet p = new Packet(PacketType.CREATE_ROOM);
+        Packet p = new Packet(PacketType.CHANGE_ROOM);
+        p.Write(creating); // are you trying to create this room?
         p.Write(name);
         sendPacket(p);
     }
