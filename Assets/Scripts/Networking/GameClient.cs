@@ -75,6 +75,7 @@ public class GameClient : MonoBehaviour {
         if (levelNum == 1) {
             lobbyUI = FindObjectOfType<LobbyUIController>();
             lobbyUI.client = this;
+            lobbyUI.updateRoomNames();
         }
 
         //GameObject levelGO = GameObject.Find("Level");
@@ -198,7 +199,6 @@ public class GameClient : MonoBehaviour {
                     Color32 color = packet.ReadColor();
                     playersInMyRoom.Clear();
                     playersInMyRoom.Add(new PlayerInfo(id, name, color));
-
                     Debug.Log("CLIENT: authenticated by server, joining lobby");
                     menuUI.setStatusText("Login successful!", Color.yellow, false);
 
@@ -254,7 +254,7 @@ public class GameClient : MonoBehaviour {
                 break;
 
             case PacketType.SPAWN_BOMB:
-                level.placeBomb(packet.ReadVector3(), false);
+                level.placeBomb(packet.ReadVector3(), false, 3);
                 break;
 
             case PacketType.RESTART_GAME:
@@ -283,8 +283,9 @@ public class GameClient : MonoBehaviour {
                 int pjid = packet.ReadInt();
                 string pjname = packet.ReadString();
                 Color32 pjcolor = packet.ReadColor();
-                Debug.Log("CLIENT: player joined room " + pjname);
+                Debug.Log("CLIENT: joined room: " + pjname);
                 playersInMyRoom.Add(new PlayerInfo(pjid, pjname, pjcolor));
+                lobbyUI.updateRoomNames();
                 lobbyUI.logConnectionMessage(pjname, pjcolor, true, false);
                 break;
             case PacketType.PLAYER_LEFT_ROOM:    // a player left your room
@@ -294,6 +295,7 @@ public class GameClient : MonoBehaviour {
                     if (pi.id == plid) {
                         lobbyUI.logConnectionMessage(pi.name, pi.color, false, false);
                         playersInMyRoom.RemoveAt(i);
+                        lobbyUI.updateRoomNames();
                         break;
                     }
                 }
@@ -319,6 +321,7 @@ public class GameClient : MonoBehaviour {
                 for (int i = 0; i < len; ++i) {
                     playersInMyRoom.Add(new PlayerInfo(packet.ReadInt(), packet.ReadString(), packet.ReadColor()));
                 }
+                lobbyUI.updateRoomNames();
                 break;
             case PacketType.PLAYER_JOINED_SERVER:
                 lobbyUI.logConnectionMessage(packet.ReadString(), packet.ReadColor(), true, true);
@@ -327,9 +330,13 @@ public class GameClient : MonoBehaviour {
                 lobbyUI.logConnectionMessage(packet.ReadString(), packet.ReadColor(), false, true);
                 break;
             case PacketType.ROOM_LIST_UPDATE:
-
-
-
+                List<string> roomListUpdate = new List<string>();
+                len = packet.ReadInt();
+                for(int i = 0; i < len; ++i) {
+                    roomListUpdate.Add(packet.ReadString());
+                    roomListUpdate.Add(packet.ReadInt().ToString());
+                }
+                lobbyUI.updateRoomList(roomListUpdate);
                 break;
             default:
                 break;

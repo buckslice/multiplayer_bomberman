@@ -308,7 +308,7 @@ public class GameServer : MonoBehaviour {
                 p.Write(packet.ReadString());
                 p.Write(packet.ReadColor());
                 p.Write(packet.ReadString());
-                broadcastToAllButOne(p, clientID, 0);   // only to lobby
+                broadcastToAllButOne(p, clientID, getPlayerRoom(clientID));   // only room they are in
                 break;
             case PacketType.CHANGE_ROOM:
                 {
@@ -328,8 +328,7 @@ public class GameServer : MonoBehaviour {
 
                             movePlayerToRoom(getPlayerByID(clientID), players.Count - 1);
 
-                            // TODO broadcast to rest of players that new room is available
-                            // probably just send list of strings of all rooms (except lobby)
+                            sendRoomListUpdate();
                         }
                     } else {
                         if (roomNames.Contains(roomName)) {
@@ -368,15 +367,6 @@ public class GameServer : MonoBehaviour {
             recalculateIndices();
         }
 
-        // check to see if there are any empty rooms
-        for (int i = 1; i < players.Count; ++i) {
-            if (players[i].Count == 0) {
-                players.RemoveAt(i);
-                // send all players in lobby updated room list
-                i--;
-            }
-        }
-
         // give new player a list of other players in room
         Packet npPacket = new Packet(PacketType.JOINED_ROOM);
         npPacket.Write(roomNames[roomIndex]);    // send them the room name
@@ -400,6 +390,31 @@ public class GameServer : MonoBehaviour {
 
         broadcastToAllButOne(opPacket, player.id, roomIndex);
 
+        // check to see if there are any empty rooms
+        bool shouldSendRoomUpdate = false;
+        for (int i = 1; i < players.Count; ++i) {
+            if (players[i].Count == 0) {
+                players.RemoveAt(i);
+                roomNames.RemoveAt(i);
+                shouldSendRoomUpdate = true;
+                i--;
+            }
+        }
+        // send updated room list to all players in lobby
+        if (shouldSendRoomUpdate) {
+            sendRoomListUpdate();
+        }
+
+    }
+
+    private void sendRoomListUpdate() {
+        Packet ruPacket = new Packet(PacketType.ROOM_LIST_UPDATE);
+        ruPacket.Write(roomNames.Count-1);
+        for (int i = 1; i < roomNames.Count; ++i) {
+            ruPacket.Write(roomNames[i]);       // send name of room
+            ruPacket.Write(players[i].Count);   // send number of players in room
+        }
+        broadcastPacket(ruPacket, 0);   // broadcast packet to lobby
     }
 
     // remove client from player list if he is on it
