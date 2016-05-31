@@ -12,6 +12,8 @@ public class Level : MonoBehaviour {
     public const int WALL_CRACKED = 2;
     public const int BOMB = 3;
 
+    public int powerUpPercent;
+
     private int[] tiles;
 
     [SerializeField]
@@ -249,7 +251,7 @@ public class Level : MonoBehaviour {
 
     // figure out which tile 'pos' is in
     // then place bomb prefab there
-    public void placeBomb(Vector3 pos, bool thisPlayers) {
+    public void placeBomb(Vector3 pos, bool thisPlayers, int bombRange) {
         int x = (int)(pos.x / SIZE);
         int y = (int)(pos.z / SIZE);
 
@@ -266,8 +268,13 @@ public class Level : MonoBehaviour {
         go.name = "Bomb";
         go.tag = thisPlayers ? "PlayerBomb" : "Bomb";
         Bomb b = go.GetComponent<Bomb>();
-        b.init(x, y, this);
+        b.init(x, y, this, bombRange);
         bombs.Add(y * width + x, b);
+    }
+
+    public void placePowerUp(Vector3 pos)
+    {
+
     }
 
     public void spawnExplosion(int x, int y, int dx, int dy, int life) {
@@ -278,6 +285,12 @@ public class Level : MonoBehaviour {
         setTile(x, y, GROUND);
         if (id == WALL_CRACKED) {
             needToRebuild = true;
+
+            if (Random.value < powerUpPercent/100f) // handling for powerup spawning
+            {
+
+            }
+
             life = 0; // reduce life of explosion to zero so it wont spread anymore
         }
         if (id == BOMB) {    // this explosion hit a bomb so blow bomb up now

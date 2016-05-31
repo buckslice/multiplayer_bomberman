@@ -4,7 +4,8 @@ using System.Collections;
 public class PlayerController : MonoBehaviour {
     private float speed = 5.0f;
     private Rigidbody rb;
-    private int bombLimit = 3;
+    public int bombLimit = 1;
+    public int bombRange = 2;
 
     public PlayerSync playerSync { private get; set; }
     private Level level;
@@ -20,7 +21,7 @@ public class PlayerController : MonoBehaviour {
     void Update() {
         if (Input.GetKeyDown(KeyCode.Space)) {  // lay bomb
             if (GameObject.FindGameObjectsWithTag("PlayerBomb").Length < bombLimit) {
-                level.placeBomb(transform.position, true);
+                level.placeBomb(transform.position, true, bombRange);
                 playerSync.sendBomb(transform.position);
             }
         }
