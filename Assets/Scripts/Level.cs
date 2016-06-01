@@ -5,7 +5,7 @@ public class Level : MonoBehaviour {
 
     public LevelData ld = null;
 
-    private int powerUpPercent = 50;
+    private int powerUpPercent = 20;
 
     [SerializeField]
     private Texture2D[] textures;
@@ -30,6 +30,7 @@ public class Level : MonoBehaviour {
     private List<Vector3> verts = new List<Vector3>();
     private List<Vector2> uvs = new List<Vector2>();
     private int triNum = 0;
+    private float rebuildTimer = 0.0f;
 
     public void Awake() {
 
@@ -131,11 +132,10 @@ public class Level : MonoBehaviour {
         if (index == LevelData.BOMB) {
             index = LevelData.GROUND;
         }
-        if (index == LevelData.POWERUP)
-        {
+        if (index == LevelData.POWERUP) {
             index = LevelData.GROUND;
         }
-            if (index == LevelData.GROUND && (x + y) % 2 == 0) {
+        if (index == LevelData.GROUND && (x + y) % 2 == 0) {
             index = 3;  // hardcoded as the index of the ground_dark texture for now
             // should make a map or something so we could have random wall textures and stuff too
         }
@@ -181,8 +181,7 @@ public class Level : MonoBehaviour {
         bombs.Add(y * LevelData.width + x, b);
     }
 
-    public void placePowerUp(Vector3 pos, int type)
-    {
+    public void placePowerUp(Vector3 pos, int type) {
         float SIZE = LevelData.SIZE;
         int x = (int)(pos.x / SIZE);
         int y = (int)(pos.z / SIZE);
@@ -192,15 +191,12 @@ public class Level : MonoBehaviour {
         Vector3 spawn = new Vector3(xf, 1f, yf);
 
         ld.setTile(x, y, LevelData.POWERUP);
-        if (type == 1)
-        {
+        if (type == 1) {
             GameObject go = (GameObject)Instantiate(fireUpPrefab, spawn, Quaternion.identity);
             go.name = "FireUp";
             PowerUp p = go.GetComponent<PowerUp>();
             p.init(x, y, this, type);
-        }
-        else
-        {
+        } else {
             GameObject go = (GameObject)Instantiate(bombUpPrefab, spawn, Quaternion.identity);
             go.name = "FireUp";
             PowerUp p = go.GetComponent<PowerUp>();
@@ -216,18 +212,13 @@ public class Level : MonoBehaviour {
         ld.setTile(x, y, LevelData.GROUND);
         if (id == LevelData.WALL_CRACKED) {
             needToRebuild = true;
-            Debug.Log("Will it happen?"+ (powerUpPercent / 100f).ToString());
             if (Random.value < powerUpPercent / 100f) // handling for powerup spawning
             {
-                Debug.Log("it's trying to spawn a powerup!");
                 float xf2 = x * LevelData.SIZE + LevelData.SIZE * 0.5f;
                 float yf2 = y * LevelData.SIZE + LevelData.SIZE * 0.5f;
-                if (Random.value < .5)
-                {
+                if (Random.value < 0.5f) {
                     placePowerUp(new Vector3(xf2, LevelData.SIZE * 0.5f, yf2), 1);
-                }
-                else
-                {
+                } else {
                     placePowerUp(new Vector3(xf2, LevelData.SIZE * 0.5f, yf2), 2);
                 }
             }
@@ -249,8 +240,10 @@ public class Level : MonoBehaviour {
     }
 
     void LateUpdate() {
-        if (needToRebuild) {
+        rebuildTimer -= Time.deltaTime;
+        if (needToRebuild || rebuildTimer < 0.0f) {
             buildMesh();
+            rebuildTimer = 1.0f;
             needToRebuild = false;
         }
     }

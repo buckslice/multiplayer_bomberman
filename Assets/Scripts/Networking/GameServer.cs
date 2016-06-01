@@ -154,7 +154,7 @@ public class GameServer : MonoBehaviour {
             if (numAlive <= 1) { // if either of these then game is over
                 Packet gpacket = new Packet(PacketType.GAME_END);
                 string message = "";
-                if(numAlive == 0) {
+                if (numAlive == 0) {
                     message = LobbyUIController.getTextWithColor("It's a Draw!", Color.yellow);
                 } else {
                     message = LobbyUIController.getTextWithColor(winner.name, winner.color) + " Wins!";
@@ -441,15 +441,25 @@ public class GameServer : MonoBehaviour {
             if (rooms[i].players.Count == 0) {
                 Debug.Log("SERVER: closing down empty room: " + rooms[i].name);
                 rooms.RemoveAt(i--);
+                recalculateIndices();
             }
         }
 
         // broadcast a new roomlist packet to everyone in lobby
         Packet ruPacket = new Packet(PacketType.ROOM_LIST_UPDATE);
-        ruPacket.Write(rooms.Count - 1);
+        // find number of open rooms (not in progress)
+        int numAvailableRooms = 0;
         for (int i = 1; i < rooms.Count; ++i) {
-            ruPacket.Write(rooms[i].name);           // send name of room
-            ruPacket.Write(rooms[i].players.Count);  // send number of players in room
+            if (rooms[i].countdownTimer > 0.0f) {
+                numAvailableRooms++;
+            }
+        }
+        ruPacket.Write(numAvailableRooms);
+        for (int i = 1; i < rooms.Count; ++i) {
+            if (rooms[i].countdownTimer > 0.0f) {
+                ruPacket.Write(rooms[i].name);           // send name of room
+                ruPacket.Write(rooms[i].players.Count);  // send number of players in room
+            }
         }
         broadcastPacket(ruPacket, 0);
     }
@@ -493,6 +503,17 @@ public class GameServer : MonoBehaviour {
     }
 
     private PlayerState getPlayerByID(int clientID) {
+        //for(int r = 0; r < rooms.Count; ++r) {
+        //    for(int i = 0; i < rooms[r].players.Count; ++i) {
+        //        if(rooms[r].players[i].id == clientID) {
+        //            return rooms[r].players[i];
+        //        }
+        //    }
+        //}
+        //Debug.LogError("SERVER: Can't find player by ID!");
+        //return null;
+
+        // commenting out for now because not getting recalculated at correct times
         Debug.Assert(playerIndices.ContainsKey(clientID));
         PlayerIndex pi = playerIndices[clientID];
         return rooms[pi.room].players[pi.index];

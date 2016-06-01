@@ -341,6 +341,11 @@ public class GameClient : MonoBehaviour {
                 for (int i = 0; i < playersInGame.Count; ++i) {
                     Destroy(playersInGame[i].gameObject);
                 }
+                // find and destroy all leftover powerups
+                GameObject[] powerups = GameObject.FindGameObjectsWithTag("PowerUp");
+                for(int i = 0; i < powerups.Length; ++i) {
+                    Destroy(powerups[i]);
+                }
                 playersInGame.Clear();
                 lobbyUI.fadeOutWithText(message);
 
