@@ -5,7 +5,7 @@ public class Level : MonoBehaviour {
 
     public LevelData ld = null;
 
-    public int powerUpPercent;
+    private int powerUpPercent = 50;
 
     [SerializeField]
     private Texture2D[] textures;
@@ -131,7 +131,11 @@ public class Level : MonoBehaviour {
         if (index == LevelData.BOMB) {
             index = LevelData.GROUND;
         }
-        if (index == LevelData.GROUND && (x + y) % 2 == 0) {
+        if (index == LevelData.POWERUP)
+        {
+            index = LevelData.GROUND;
+        }
+            if (index == LevelData.GROUND && (x + y) % 2 == 0) {
             index = 3;  // hardcoded as the index of the ground_dark texture for now
             // should make a map or something so we could have random wall textures and stuff too
         }
@@ -177,24 +181,32 @@ public class Level : MonoBehaviour {
         bombs.Add(y * LevelData.width + x, b);
     }
 
-    //public void placePowerUp(int x, int y, int type) {
-    //    float xf = x * SIZE + SIZE * 0.5f;
-    //    float yf = y * SIZE + SIZE * 0.5f;
-    //    Vector3 spawn = new Vector3(xf, 0.0f, yf);
+    public void placePowerUp(Vector3 pos, int type)
+    {
+        float SIZE = LevelData.SIZE;
+        int x = (int)(pos.x / SIZE);
+        int y = (int)(pos.z / SIZE);
 
-    //    ld.setTile(x, y, POWERUP);
-    //    if (type == 1) {
-    //        GameObject go = (GameObject)Instantiate(fireUpPrefab, spawn, Quaternion.identity);
-    //        go.name = "FireUp";
-    //        PowerUp p = go.GetComponent<PowerUp>();
-    //        p.init(x, y, this, type);
-    //    } else {
-    //        GameObject go = (GameObject)Instantiate(bombUpPrefab, spawn, Quaternion.identity);
-    //        go.name = "FireUp";
-    //        PowerUp p = go.GetComponent<PowerUp>();
-    //        p.init(x, y, this, type);
-    //    }
-    //}
+        float xf = x * SIZE + SIZE * 0.5f;
+        float yf = y * SIZE + SIZE * 0.5f;
+        Vector3 spawn = new Vector3(xf, 1f, yf);
+
+        ld.setTile(x, y, LevelData.POWERUP);
+        if (type == 1)
+        {
+            GameObject go = (GameObject)Instantiate(fireUpPrefab, spawn, Quaternion.identity);
+            go.name = "FireUp";
+            PowerUp p = go.GetComponent<PowerUp>();
+            p.init(x, y, this, type);
+        }
+        else
+        {
+            GameObject go = (GameObject)Instantiate(bombUpPrefab, spawn, Quaternion.identity);
+            go.name = "FireUp";
+            PowerUp p = go.GetComponent<PowerUp>();
+            p.init(x, y, this, type);
+        }
+    }
 
     public void spawnExplosion(int x, int y, int dx, int dy, int life) {
         int id = ld.getTile(x, y);
@@ -204,15 +216,21 @@ public class Level : MonoBehaviour {
         ld.setTile(x, y, LevelData.GROUND);
         if (id == LevelData.WALL_CRACKED) {
             needToRebuild = true;
-
-            //if (Random.value < powerUpPercent / 100f) // handling for powerup spawning
-            //{
-            //    if (Random.value < .5) {
-            //        placePowerUp(x, y, 1);
-            //    } else {
-            //        placePowerUp(x, y, 2);
-            //    }
-            //}
+            Debug.Log("Will it happen?"+ (powerUpPercent / 100f).ToString());
+            if (Random.value < powerUpPercent / 100f) // handling for powerup spawning
+            {
+                Debug.Log("it's trying to spawn a powerup!");
+                float xf2 = x * LevelData.SIZE + LevelData.SIZE * 0.5f;
+                float yf2 = y * LevelData.SIZE + LevelData.SIZE * 0.5f;
+                if (Random.value < .5)
+                {
+                    placePowerUp(new Vector3(xf2, LevelData.SIZE * 0.5f, yf2), 1);
+                }
+                else
+                {
+                    placePowerUp(new Vector3(xf2, LevelData.SIZE * 0.5f, yf2), 2);
+                }
+            }
 
             life = 0; // reduce life of explosion to zero so it wont spread anymore
         }

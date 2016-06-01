@@ -336,6 +336,13 @@ public class GameServer : MonoBehaviour {
                 broadcastToAllButOne(p, clientID, getPlayerRoom(clientID));
                 break;
 
+            case PacketType.SPAWN_POWERUP:
+                p = new Packet(PacketType.SPAWN_POWERUP);
+                p.Write(packet.ReadVector3());
+                p.Write(packet.ReadInt());
+                broadcastToAllButOne(p, clientID, getPlayerRoom(clientID));
+                break;
+
             case PacketType.PLAYER_DIED:
                 getPlayerByID(clientID).alive = false;
                 break;

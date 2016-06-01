@@ -10,6 +10,7 @@ public enum PacketType : byte {
     CHAT_MESSAGE,
     STATE_UPDATE,
     SPAWN_BOMB,
+    SPAWN_POWERUP,
     PLAYER_DIED,
     GAME_END,
     GAME_COUNTDOWN,

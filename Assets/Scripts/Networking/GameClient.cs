@@ -227,6 +227,10 @@ public class GameClient : MonoBehaviour {
                 level.placeBomb(packet.ReadVector3(), false, packet.ReadInt());
                 break;
 
+            case PacketType.SPAWN_POWERUP:
+                level.placePowerUp(packet.ReadVector3(), packet.ReadInt());
+                break;
+
             case PacketType.PLAYER_JOINED_ROOM:    // a player joined your room
                 int pjid = packet.ReadInt();
                 string pjname = packet.ReadString();

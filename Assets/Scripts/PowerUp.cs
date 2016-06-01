@@ -24,7 +24,7 @@ public class PowerUp : MonoBehaviour {
             if (type == 1) {
                 col.GetComponent<PlayerController>().bombRange++;
             } else {
-                col.GetComponent<PlayerController>().bombRange--;
+                col.GetComponent<PlayerController>().bombLimit++;
             }
             Destroy(gameObject);
         }
