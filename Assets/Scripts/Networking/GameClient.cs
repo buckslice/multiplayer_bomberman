@@ -81,23 +81,6 @@ public class GameClient : MonoBehaviour {
             lobbyUI = FindObjectOfType<LobbyUIController>();
             lobbyUI.client = this;
         }
-
-        //GameObject levelGO = GameObject.Find("Level");
-        //if (levelGO && levelNum == 1) {
-        //    level = levelGO.GetComponent<Level>();
-
-        //    for (int i = 0; i < levelLoad.Length; ++i) {
-        //        level.setTile(i, levelLoad[i]);
-        //    }
-        //    level.BuildMesh();
-
-        //    // spawn player for this client
-        //    GameObject pgo = (GameObject)Instantiate(playerPrefab, spawn, Quaternion.identity);
-        //    pgo.GetComponent<PlayerSync>().init(playerID, this);
-
-        //    // delay starting the game a little so the client can get rid of old state packets from server
-        //    StartCoroutine(setFullyLoaded(0.3f));
-        //}
     }
 
     // Update is called once per frame
@@ -215,16 +198,28 @@ public class GameClient : MonoBehaviour {
 
             case PacketType.STATE_UPDATE:
                 int numAlivePlayers = packet.ReadInt();
-                id = packet.ReadInt();
-                for(int i = 0; i < playersInGame.Count; ++i) {
-                    if (playersInGame[i].gameObject.activeSelf) {
-                        if (id != playersInGame[i].playerID) {
-                            playersInGame[i].gameObject.SetActive(false);
-                        } else {
-                            playersInGame[i].updatePosition(packet.ReadVector3());
-                            id = packet.ReadInt();
-                        }
+                for (int i = 0, ai = 0; ai < numAlivePlayers; ++ai) {
+                    id = packet.ReadInt();
+                    Vector3 pos = packet.ReadVector3();
+                    // if player id mismatch then delete players until they match
+                    while (i < playersInGame.Count && playersInGame[i].playerID != id) {
+                        Destroy(playersInGame[i].gameObject);
+                        playersInGame.RemoveAt(i);
                     }
+                    if (i == playersInGame.Count) { // init new gameObject if new player
+                        GameObject pgo = (GameObject)Instantiate(playerPrefab, pos, Quaternion.identity);
+                        PlayerSync newPlayer = pgo.GetComponent<PlayerSync>();
+                        newPlayer.init(id, playersInRoom[i].color, i == getMyPlayerIndex() ? this : null);
+                        playersInGame.Add(newPlayer);
+                    }else if(i != getMyPlayerIndex()) { // else update existing player if not you
+                        playersInGame[i].updatePosition(pos);
+                    }
+                    ++i;
+                }
+                // remove players from the end of list
+                while(playersInGame.Count > 0 && playersInGame.Count > numAlivePlayers) {
+                    Destroy(playersInGame[playersInGame.Count - 1].gameObject);
+                    playersInGame.RemoveAt(playersInGame.Count - 1);
                 }
                 break;
 
@@ -264,7 +259,7 @@ public class GameClient : MonoBehaviour {
                 break;
 
             case PacketType.YOU_JOINED_ROOM:  // you joined a room
-                lobbyUI.setLobbyActive(true);
+                //lobbyUI.setLobbyActive(true);
                 waitingForRoomChangeResponse = false;
                 roomName = packet.ReadString();
                 len = packet.ReadInt();
@@ -315,7 +310,7 @@ public class GameClient : MonoBehaviour {
 
                     GameObject levelGO = GameObject.Find("Level");
                     if (!levelGO) {
-                        Debug.Log("PROBLEM");
+                        Debug.LogError("CLIENT: can't find level!!!");
                         return;
                     }
 
@@ -330,28 +325,20 @@ public class GameClient : MonoBehaviour {
                     }
                     level.buildMesh();
 
-                    // spawn player game objects
-                    for (int i = 0; i < playersInRoom.Count; ++i) {
-                        Vector3 spawn = packet.ReadVector3();
-                        GameObject pgo = (GameObject)Instantiate(playerPrefab, spawn, Quaternion.identity);
-                        PlayerSync newPlayer = pgo.GetComponent<PlayerSync>();
-                        PlayerInfo player = playersInRoom[i];
-                        newPlayer.init(player.id, player.color, i == getMyPlayerIndex() ? this : null);
-                        playersInGame.Add(newPlayer);
-                    }
-
                     lobbyUI.setLobbyActive(false);
+                    lobbyUI.fadeInFromBlack();
                 } else {
                     lobbyUI.logMessage(t + "...", Color.yellow);
                 }
                 break;
             case PacketType.GAME_END:
                 string message = packet.ReadString();
+                // destroy remaining player objects
                 for (int i = 0; i < playersInGame.Count; ++i) {
                     Destroy(playersInGame[i].gameObject);
                 }
                 playersInGame.Clear();
-                //lobbyUI.fadeOutWithText(message);
+                lobbyUI.fadeOutWithText(message);
 
                 break;
             default:

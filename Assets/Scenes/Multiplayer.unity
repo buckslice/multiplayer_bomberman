@@ -484,7 +484,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1566662128}
   m_HandleRect: {fileID: 1566662127}
   m_Direction: 2
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -912,7 +912,9 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 
+  m_Text: '<< Hit Enter to Chat! >>
+
+'
 --- !u!222 &199601692
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -3139,7 +3141,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0.872, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_OnCullStateChanged:
     m_PersistentCalls:

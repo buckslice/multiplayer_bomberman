@@ -153,21 +153,26 @@ public class GameServer : MonoBehaviour {
             }
             if (numAlive <= 1) { // if either of these then game is over
                 Packet gpacket = new Packet(PacketType.GAME_END);
-                string message = (numAlive == 0 ? "It's a Draw!" : winner.name + " Wins!");
+                string message = "";
+                if(numAlive == 0) {
+                    message = LobbyUIController.getTextWithColor("It's a Draw!", Color.yellow);
+                } else {
+                    message = LobbyUIController.getTextWithColor(winner.name, winner.color) + " Wins!";
+                }
                 gpacket.Write(message);
                 broadcastPacket(gpacket, roomIndex);
 
                 for (int i = 0; i < playersInRoom.Count; ++i) {
-                    Debug.Log("moving player to lobby " + playersInRoom[i].name);
+                    Debug.Log("SERVER: moving " + playersInRoom[i].name + " back to lobby");
                     movePlayerToRoom(playersInRoom[i], 0);  // move them back to lobby
                 }
-                --roomIndex;
+                --roomIndex;    // a room got removed from room list so do this
                 continue;
             }
 
             // else game still going so send state updates
             Packet updatePacket = new Packet(PacketType.STATE_UPDATE);
-            updatePacket.Write(playersInRoom.Count);
+            updatePacket.Write(numAlive);
             // send positions of other alive players in room
             for (int i = 0; i < playersInRoom.Count; ++i) {
                 if (playersInRoom[i].alive) {
@@ -195,11 +200,7 @@ public class GameServer : MonoBehaviour {
             for (int j = 0; j < tiles.Length; j++) {
                 cdPacket.Write((byte)tiles[j]);
             }
-            // give each player a spawn point
-            for (int j = 0; j < players.Count; ++j) {
-                players[j].pos = level.getRandomGroundPosition();
-                cdPacket.Write(players[j].pos);
-            }
+            players[i].pos = level.getRandomGroundPosition();
 
             sendPacket(cdPacket, players[i].id);
         }
