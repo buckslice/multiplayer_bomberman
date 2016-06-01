@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using System.Text;
+using System.Collections;
 using System.Collections.Generic;
 
 public class LobbyUIController : MonoBehaviour {
@@ -22,6 +23,12 @@ public class LobbyUIController : MonoBehaviour {
     public Object joinRoomPanelPrefab;
     public Object otherPlayerPanelPrefab;
     public PlayerPanelScript myPlayerPanel;
+    public GameObject mainLobbyPanel;
+
+    private GameObject fadePanel;
+    private Image fadeImage;
+    private Text gameText;
+    private bool loading = false;
 
     public GameClient client { private get; set; }
 
@@ -34,7 +41,68 @@ public class LobbyUIController : MonoBehaviour {
     // Use this for initialization
     void Start() {
         chatInputBar.gameObject.SetActive(false);
+
+        fadePanel = transform.Find("FadePanel").gameObject;
+        if (fadePanel) {
+            fadeImage = fadePanel.GetComponent<Image>();
+            gameText = fadePanel.transform.Find("GameText").GetComponent<Text>();
+            gameText.gameObject.SetActive(false);
+        }
+
+        loading = true;
+        StartCoroutine(fade(true, false, 1.0f));
     }
+
+    public void fadeOutWithText(string t) {
+        if (loading) {
+            return;
+        }
+        gameText.gameObject.SetActive(true);
+        gameText.text = t;
+        loading = true;
+        StartCoroutine(fadeOutReloadRoutine());
+    }
+
+    private IEnumerator fadeOutReloadRoutine() {
+        yield return fade(false, false, 2.0f);
+        fadePanel.SetActive(false);
+        gameObject.SetActive(true);
+    }
+
+    // fades in from whatever color the image is at
+    private IEnumerator fade(bool fadein, bool pauseGame, float time) {
+        if (!fadein) {
+            fadePanel.SetActive(true);
+        }
+        if (pauseGame) {
+            Time.timeScale = 0.0f;
+        }
+
+        float endTime = Time.realtimeSinceStartup + time;
+        while (Time.realtimeSinceStartup < endTime) {
+            float t = Time.realtimeSinceStartup;
+            Color c = fadeImage.color;
+            if (fadein) {
+                c.a = (endTime - t) / time;
+            } else {
+                c.a = 1.0f - (endTime - t) / time;
+            }
+            fadeImage.color = c;
+            yield return null;
+        }
+
+        if (pauseGame) {
+            Time.timeScale = 1.0f;
+        }
+
+        // reset fade variables back to defaults
+        fadeImage.color = Color.black;
+        if (fadein) {
+            fadePanel.SetActive(false);
+        }
+        loading = false;
+    }
+
 
     // Update is called once per frame
     void Update() {
@@ -58,6 +126,10 @@ public class LobbyUIController : MonoBehaviour {
                 chatInputBar.text = "";
             }
         }
+    }
+
+    public void setLobbyActive(bool active) {
+        mainLobbyPanel.SetActive(active);
     }
 
     // called when menu button is pressed

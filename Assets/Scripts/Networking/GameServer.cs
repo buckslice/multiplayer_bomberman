@@ -25,17 +25,13 @@ public class GameServer : MonoBehaviour {
 
     private DatabaseUtil dbUtil;
 
-    private Level level;
-
     class Room {
         public string name;
         public float countdownTimer = 5.0f;
         public List<PlayerState> players = new List<PlayerState>();
+        public LevelData level = new LevelData();
         public Room(string name) {
             this.name = name;
-        }
-        public bool gameInProgress() {
-            return countdownTimer <= 0.0f;
         }
     }
 
@@ -60,6 +56,11 @@ public class GameServer : MonoBehaviour {
             this.name = name;
             this.color = color;
             this.pos = pos;
+        }
+        public void reset() {
+            ready = false;
+            alive = true;
+            pos = Vector3.zero;
         }
     }
 
@@ -87,8 +88,7 @@ public class GameServer : MonoBehaviour {
 
         if (!success) {
             Debug.Log("SERVER: start broadcast discovery failed!");
-            //Application.Quit();
-            Destroy(this);
+            ResetToMenu.Reset();
         } else if (NetworkTransport.IsBroadcastDiscoveryRunning()) {
             Debug.Log("SERVER: started and broadcasting");
         } else {
@@ -112,19 +112,18 @@ public class GameServer : MonoBehaviour {
         for (int roomIndex = 1; roomIndex < rooms.Count; ++roomIndex) {
             Room room = rooms[roomIndex];
             List<PlayerState> playersInRoom = rooms[roomIndex].players;
-            if (playersInRoom.Count < 2) { // room still filling up
-                continue;
-            }
-            // check if all players are ready
-            bool allReady = true;
-            for (int i = 0; i < playersInRoom.Count; ++i) {
-                if (!playersInRoom[i].ready) {
-                    allReady = false;
-                    break;
-                }
-            }
+
+            //if game not going
             if (room.countdownTimer > 0) {
-                if (allReady) {
+                // check if all players are ready
+                bool allReady = true;
+                for (int i = 0; i < playersInRoom.Count; ++i) {
+                    if (!playersInRoom[i].ready) {
+                        allReady = false;
+                        break;
+                    }
+                }
+                if (allReady && playersInRoom.Count >= 2) {
                     int btime = (int)(room.countdownTimer + 1);
                     room.countdownTimer -= Time.deltaTime;
                     int ptime = (int)(room.countdownTimer + 1);
@@ -152,17 +151,23 @@ public class GameServer : MonoBehaviour {
                     winner = playersInRoom[i];
                 }
             }
-            if(numAlive <= 1) { // if either of these then game is over
-                string message = (numAlive == 0 ? "It's a Draw!" : winner.name + " wins!");
+            if (numAlive <= 1) { // if either of these then game is over
+                Packet gpacket = new Packet(PacketType.GAME_END);
+                string message = (numAlive == 0 ? "It's a Draw!" : winner.name + " Wins!");
+                gpacket.Write(message);
+                broadcastPacket(gpacket, roomIndex);
 
-                // move all players back to lobby
-                // delete room
+                for (int i = 0; i < playersInRoom.Count; ++i) {
+                    Debug.Log("moving player to lobby " + playersInRoom[i].name);
+                    movePlayerToRoom(playersInRoom[i], 0);  // move them back to lobby
+                }
+                --roomIndex;
                 continue;
             }
 
             // else game still going so send state updates
             Packet updatePacket = new Packet(PacketType.STATE_UPDATE);
-            updatePacket.Write(numAlive);
+            updatePacket.Write(playersInRoom.Count);
             // send positions of other alive players in room
             for (int i = 0; i < playersInRoom.Count; ++i) {
                 if (playersInRoom[i].alive) {
@@ -177,56 +182,27 @@ public class GameServer : MonoBehaviour {
     }
 
     private void generateAndSendStartPackets(int roomIndex) {
-        GameObject levelGO = GameObject.Find("Level");
-        if (levelGO) {
-            level = levelGO.GetComponent<Level>();
-            level.GenerateLevel();
-        } else {
-            Debug.LogError("SERVER: Can't find Level");
-            return;
-        }
+        LevelData level = rooms[roomIndex].level;
+        level.generateLevel();
+
         List<PlayerState> players = rooms[roomIndex].players;
         for (int i = 0; i < players.Count; ++i) {
             Packet cdPacket = new Packet(PacketType.GAME_COUNTDOWN);
             cdPacket.Write(0);
-
+            // send level data
             int[] tiles = level.getTiles();
             cdPacket.Write(tiles.Length);
             for (int j = 0; j < tiles.Length; j++) {
                 cdPacket.Write((byte)tiles[j]);
             }
-            cdPacket.Write(level.getRandomGroundPosition());
+            // give each player a spawn point
+            for (int j = 0; j < players.Count; ++j) {
+                players[j].pos = level.getRandomGroundPosition();
+                cdPacket.Write(players[j].pos);
+            }
 
             sendPacket(cdPacket, players[i].id);
         }
-    }
-
-    void LateUpdate() {
-        //if (winner != -1) {    // if game has ended then restart
-        //    level.GenerateLevel();
-        //    // figure out message to say at end
-        //    string gameOverMessage = "It's a Draw!";
-        //    if (winner > 0) {
-        //        string playername = players[playerIndices[winner]].name;
-        //        gameOverMessage = playername + " wins!";
-        //    }
-
-        //    for (int i = 0; i < players.Count; ++i) {
-        //        Packet p = new Packet(PacketType.RESTART_GAME);
-        //        p.Write(winner);
-        //        int[] tiles = level.getTiles();
-        //        p.Write(tiles.Length);
-        //        for (int j = 0; j < tiles.Length; j++) {
-        //            p.Write((byte)tiles[j]);
-        //        }
-        //        p.Write(level.getRandomGroundPosition());
-        //        p.Write(gameOverMessage);
-
-        //        sendPacket(p, players[i].id);
-        //        players[i].alive = true;
-        //    }
-        //    winner = -1;
-        //}
     }
 
     private void sendPacket(Packet p, int clientID) {
@@ -355,6 +331,7 @@ public class GameServer : MonoBehaviour {
             case PacketType.SPAWN_BOMB:
                 p = new Packet(PacketType.SPAWN_BOMB);
                 p.Write(packet.ReadVector3());
+                p.Write(packet.ReadInt());
                 broadcastToAllButOne(p, clientID, getPlayerRoom(clientID));
                 break;
 
@@ -414,7 +391,7 @@ public class GameServer : MonoBehaviour {
     // all players in new room will be notified that this player joined
     private void movePlayerToRoom(PlayerState player, int roomIndex) {
         Debug.Assert(roomIndex >= 0 && roomIndex < rooms.Count);
-        player.ready = false;
+        player.reset();
         // remove player from list and recalculate indices
         if (playerIndices.ContainsKey(player.id)) { // checks incase the player is new to the server
             PlayerIndex pi = playerIndices[player.id];
@@ -454,6 +431,7 @@ public class GameServer : MonoBehaviour {
         // checks and removes any empty rooms
         for (int i = 1; i < rooms.Count; ++i) {
             if (rooms[i].players.Count == 0) {
+                Debug.Log("SERVER: closing down empty room: " + rooms[i].name);
                 rooms.RemoveAt(i--);
             }
         }

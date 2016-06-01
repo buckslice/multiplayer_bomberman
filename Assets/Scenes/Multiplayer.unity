@@ -484,7 +484,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1566662128}
   m_HandleRect: {fileID: 1566662127}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -931,7 +931,6 @@ GameObject:
   - 23: {fileID: 279585426}
   - 33: {fileID: 279585425}
   - 64: {fileID: 279585429}
-  - 114: {fileID: 279585430}
   m_Layer: 0
   m_Name: Level
   m_TagString: Untagged
@@ -1017,19 +1016,6 @@ MeshCollider:
   serializedVersion: 2
   m_Convex: 0
   m_Mesh: {fileID: 0}
---- !u!114 &279585430
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 0}
-  m_GameObject: {fileID: 279585424}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e4ae850e41a9b2d48991f910af96b7e9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  player: {fileID: 0}
-  drawPathData: 0
 --- !u!1 &281360294
 GameObject:
   m_ObjectHideFlags: 0
@@ -3600,6 +3586,7 @@ MonoBehaviour:
   otherPlayerPanelPrefab: {fileID: 111636, guid: 42b7f680793d5e940a3b8ce52a357030,
     type: 2}
   myPlayerPanel: {fileID: 281360296}
+  mainLobbyPanel: {fileID: 1693607207}
 --- !u!1 &2092536917
 GameObject:
   m_ObjectHideFlags: 0

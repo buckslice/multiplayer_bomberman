@@ -22,7 +22,7 @@ public class PlayerController : MonoBehaviour {
         if (Input.GetKeyDown(KeyCode.Space)) {  // lay bomb
             if (GameObject.FindGameObjectsWithTag("PlayerBomb").Length < bombLimit) {
                 level.placeBomb(transform.position, true, bombRange);
-                playerSync.sendBomb(transform.position);
+                playerSync.sendBomb(transform.position, bombRange);
             }
         }
     }
@@ -42,7 +42,6 @@ public class PlayerController : MonoBehaviour {
         if (col.tag == "Explosion") {
             source.Play();
             playerSync.sendDeath();
-            Destroy(gameObject);
         }
     }
 

@@ -69,9 +69,10 @@ public class PlayerSync : MonoBehaviour {
         gameClient.sendPacket(p);
     }
 
-    public void sendBomb(Vector3 pos) {
+    public void sendBomb(Vector3 pos, int range) {
         Packet p = new Packet(PacketType.SPAWN_BOMB);
         p.Write(pos);
+        p.Write(range);
         gameClient.sendPacket(p);
     }
 

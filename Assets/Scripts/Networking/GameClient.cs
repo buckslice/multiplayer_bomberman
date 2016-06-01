@@ -57,7 +57,7 @@ public class GameClient : MonoBehaviour {
     // message processing is paused once logged in and for a couple frames
     // after because the scene transition was causing problems
     private int loadFrames = 0;
-    private bool dontCheckMessages = false;
+    private bool waitToCheckMessages = false;
     private bool justConnected = true;
 
     void OnEnable() {
@@ -111,8 +111,8 @@ public class GameClient : MonoBehaviour {
                 enabledServer = true;
             }
         } else {    // scene 1
-            if (dontCheckMessages && ++loadFrames > 2) {
-                dontCheckMessages = false;
+            if (waitToCheckMessages && ++loadFrames > 2) {
+                waitToCheckMessages = false;
             }
         }
 
@@ -133,7 +133,7 @@ public class GameClient : MonoBehaviour {
 
         // continuously loop until there are no more messages
         while (true) {
-            if (dontCheckMessages) {
+            if (waitToCheckMessages) {
                 return;
             }
             NetworkEventType recEvent = NetworkTransport.ReceiveFromHost(
@@ -203,7 +203,7 @@ public class GameClient : MonoBehaviour {
 
                     // load into next scene
                     SceneManager.LoadScene(1);
-                    dontCheckMessages = true;   // pause checking packets until in new scene
+                    waitToCheckMessages = true;   // pause checking packets until in new scene
                 } else if (id == -1) {
                     Debug.Log("CLIENT: invalid login");
                     menuUI.setStatusText("Invalid login info!", Color.red, true);
@@ -215,69 +215,23 @@ public class GameClient : MonoBehaviour {
 
             case PacketType.STATE_UPDATE:
                 int numAlivePlayers = packet.ReadInt();
-                bool myPlayerAlive = false;
-                for (int i = 0, index = 0; index < numAlivePlayers; ++index) {
-                    id = packet.ReadInt();
-                    Vector3 pos = packet.ReadVector3();
-                    if (i == getMyPlayerIndex()) {
-                        myPlayerAlive = true;
-                        continue; // ignore own position given from server for now
+                id = packet.ReadInt();
+                for(int i = 0; i < playersInGame.Count; ++i) {
+                    if (playersInGame[i].gameObject.activeSelf) {
+                        if (id != playersInGame[i].playerID) {
+                            playersInGame[i].gameObject.SetActive(false);
+                        } else {
+                            playersInGame[i].updatePosition(packet.ReadVector3());
+                            id = packet.ReadInt();
+                        }
                     }
-
-                    // if player id mismatch then delete because he got disconnected
-                    while (i < playersInGame.Count && playersInGame[i].playerID  != id) {
-                        Destroy(playersInGame[i].gameObject);
-                        playersInGame.RemoveAt(i);
-                    }
-                    // if new index is at end of list then add new player to end
-                    if (i == playersInGame.Count) {
-                        GameObject pgo = (GameObject)Instantiate(playerPrefab, pos, Quaternion.identity);
-                        PlayerSync newPlayer = pgo.GetComponent<PlayerSync>();
-                        newPlayer.init(id, playersInRoom[i].color);
-                        playersInGame.Add(newPlayer);
-                    } else {  // otherwise sync positions of other players
-                        playersInGame[i].updatePosition(pos);
-                    }
-
-                    i++;    // increment index into otherPlayers list
                 }
-                if (myPlayerAlive) {    // if my player is alive then take one off from numPlayers
-                    numAlivePlayers -= 1;
-                }
-                // make sure to remove old players off end of list
-                while (playersInGame.Count > 0 && playersInGame.Count > numAlivePlayers) {
-                    Destroy(playersInGame[playersInGame.Count - 1].gameObject);
-                    playersInGame.RemoveAt(playersInGame.Count - 1);
-                }
-
                 break;
 
             case PacketType.SPAWN_BOMB:
-                level.placeBomb(packet.ReadVector3(), false, 3);
+                level.placeBomb(packet.ReadVector3(), false, packet.ReadInt());
                 break;
 
-            //case PacketType.RESTART_GAME:
-            //    int winner = packet.ReadInt();
-
-            //    // clear otherplayers list
-            //    for (int i = 0; i < playersInGame.Count; ++i) {
-            //        if (playersInGame[i].playerID != winner) {
-            //            Destroy(playersInGame[i].gameObject);
-            //        }
-            //    }
-            //    playersInGame.Clear();
-
-            //    // save level data
-            //    levelLoad = new int[packet.ReadInt()];
-            //    for (int i = 0; i < levelLoad.Length; ++i) {
-            //        levelLoad[i] = packet.ReadByte();
-            //    }
-            //    // save player spawn
-            //    spawn = packet.ReadVector3();
-            //    string message = packet.ReadString();
-            //    FindObjectOfType<SceneLoader>().fadeOutWithText(message);
-
-                break;
             case PacketType.PLAYER_JOINED_ROOM:    // a player joined your room
                 int pjid = packet.ReadInt();
                 string pjname = packet.ReadString();
@@ -310,6 +264,7 @@ public class GameClient : MonoBehaviour {
                 break;
 
             case PacketType.YOU_JOINED_ROOM:  // you joined a room
+                lobbyUI.setLobbyActive(true);
                 waitingForRoomChangeResponse = false;
                 roomName = packet.ReadString();
                 len = packet.ReadInt();
@@ -357,21 +312,47 @@ public class GameClient : MonoBehaviour {
                 int t = packet.ReadInt();
                 if (t == 0) {
                     lobbyUI.logMessage("Game Start!", Color.yellow);
-                    // read level data
-                    // read spawn
-                    // spawn gameObjects for each player in room
-                    //int numPlayers = packet.ReadInt();
-                    //for(int i = 0; i < numPlayers; ++i) {
-                    //    Vector3 spawn = packet.ReadVector3();
-                    //    GameObject pgo = (GameObject)Instantiate(playerPrefab, spawn, Quaternion.identity);
-                    //    PlayerSync newPlayer = pgo.GetComponent<PlayerSync>();
-                    //    newPlayer.init(id);
-                    //    playersInGame.Add(newPlayer);
-                    //}
 
+                    GameObject levelGO = GameObject.Find("Level");
+                    if (!levelGO) {
+                        Debug.Log("PROBLEM");
+                        return;
+                    }
+
+                    level = levelGO.GetComponent<Level>();
+                    LevelData ld = new LevelData();
+                    level.ld = ld;
+
+                    // read level data
+                    len = packet.ReadInt();
+                    for (int i = 0; i < len; ++i) {
+                        ld.setTile(i, packet.ReadByte());
+                    }
+                    level.buildMesh();
+
+                    // spawn player game objects
+                    for (int i = 0; i < playersInRoom.Count; ++i) {
+                        Vector3 spawn = packet.ReadVector3();
+                        GameObject pgo = (GameObject)Instantiate(playerPrefab, spawn, Quaternion.identity);
+                        PlayerSync newPlayer = pgo.GetComponent<PlayerSync>();
+                        PlayerInfo player = playersInRoom[i];
+                        newPlayer.init(player.id, player.color, i == getMyPlayerIndex() ? this : null);
+                        playersInGame.Add(newPlayer);
+                    }
+
+                    lobbyUI.setLobbyActive(false);
                 } else {
                     lobbyUI.logMessage(t + "...", Color.yellow);
                 }
+                break;
+            case PacketType.GAME_END:
+                string message = packet.ReadString();
+                for (int i = 0; i < playersInGame.Count; ++i) {
+                    Destroy(playersInGame[i].gameObject);
+                }
+                playersInGame.Clear();
+                //lobbyUI.fadeOutWithText(message);
+
                 break;
             default:
                 break;
