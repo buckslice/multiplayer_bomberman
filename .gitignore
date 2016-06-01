@@ -6,4 +6,6 @@
 !ProjectSettings/**
 !SprintReports/
 !SprintReports/**
+!Build/
+!Build/**
 !DesignDoc.docx
