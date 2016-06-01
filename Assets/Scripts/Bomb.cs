@@ -42,4 +42,8 @@ public class Bomb : MonoBehaviour {
         }
     }
 
+    public void enableTrigger() {
+        GetComponent<Collider>().isTrigger = false;
+    }
+
 }

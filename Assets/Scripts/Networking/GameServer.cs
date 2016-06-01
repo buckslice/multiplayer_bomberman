@@ -503,9 +503,9 @@ public class GameServer : MonoBehaviour {
     }
 
     private PlayerState getPlayerByID(int clientID) {
-        //for(int r = 0; r < rooms.Count; ++r) {
-        //    for(int i = 0; i < rooms[r].players.Count; ++i) {
-        //        if(rooms[r].players[i].id == clientID) {
+        //for (int r = 0; r < rooms.Count; ++r) {
+        //    for (int i = 0; i < rooms[r].players.Count; ++i) {
+        //        if (rooms[r].players[i].id == clientID) {
         //            return rooms[r].players[i];
         //        }
         //    }

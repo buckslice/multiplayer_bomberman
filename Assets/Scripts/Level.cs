@@ -178,6 +178,9 @@ public class Level : MonoBehaviour {
         go.tag = thisPlayers ? "PlayerBomb" : "Bomb";
         Bomb b = go.GetComponent<Bomb>();
         b.init(x, y, this, bombRange);
+        if (!thisPlayers) {
+            b.enableTrigger();
+        }
         bombs.Add(y * LevelData.width + x, b);
     }
 
